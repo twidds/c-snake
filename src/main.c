@@ -1,11 +1,11 @@
 //#include <stdio.h>
 
 int main() {
-    //printf("hello world");
+    printf("hello world");
     //char t = getchar();
     
     //printf("%c",t);
-    //getchar();
+    getchar();
     
 
     return 0;
