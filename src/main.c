@@ -98,14 +98,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         case WM_PAINT:
             {
+                const wchar_t* message = L"WWWWWWWWWW";
+                const wchar_t* msg2 = L"\U000021D7 wwwwwwwwww";
+                
                 PAINTSTRUCT ps;
+                RECT rc;
+                GetClientRect(hwnd, &rc);
                 HDC hdc = BeginPaint(hwnd, &ps);
+                
 
                 // All painting occurs here, between BeginPaint and EndPaint.
                 
 
                 FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW+1));
-
+                rc.top += DrawText(hdc, message, -1, &rc, DT_TOP | DT_LEFT);
+                DrawText(hdc, msg2, -1, &rc, DT_TOP | DT_LEFT);
+                
+                
                 EndPaint(hwnd, &ps);
             }
             return 0;
