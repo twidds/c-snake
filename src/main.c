@@ -16,7 +16,8 @@
 #define UNICODE
 #endif
 #include <windows.h>
-
+#include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
 
 #define WIDTH 100
 #define HEIGHT 100
@@ -55,7 +56,9 @@ typedef struct snake {
 
 
 typedef struct game_state {
-    wchar_t* render_buffer;
+    GpImage* test_image;
+    wchar_t* front_buffer;
+    wchar_t* back_buffer;
     snake game_snake;
     node apple;
 } game_state;
@@ -63,6 +66,12 @@ typedef struct game_state {
 void setconsole(int w, int h);
 
 void clearconsole();
+
+void swap_buffers(wchar_t** bufa, wchar_t** bufb) {
+    wchar_t* tmp = *bufa;
+    *bufa = *bufb;
+    *bufb = tmp;
+}
 
 void render(wchar_t* buffer, void* object){
     enum object_type* t = object;
@@ -98,22 +107,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         case WM_PAINT:
             {
-                const wchar_t* message = L"WWWWWWWWWW";
-                const wchar_t* msg2 = L"\U000021D7 wwwwwwwwww";
-                
+                // const wchar_t* message = L"WWWWWWWWWW";
+                // const wchar_t* msg2 = L"\U000021D7 wwwwwwwwww";
                 PAINTSTRUCT ps;
                 RECT rc;
                 GetClientRect(hwnd, &rc);
                 HDC hdc = BeginPaint(hwnd, &ps);
-                
 
-                // All painting occurs here, between BeginPaint and EndPaint.
-                
+                GpGraphics* graphics;
+                GdipCreateFromHDC(hdc, &graphics);
 
                 FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW+1));
-                rc.top += DrawText(hdc, message, -1, &rc, DT_TOP | DT_LEFT);
-                DrawText(hdc, msg2, -1, &rc, DT_TOP | DT_LEFT);
-                
+                GdipDrawImage(graphics, state->test_image, 0, 0);
+                // DrawText(hdc, message, -1, &rc, DT_TOP | DT_LEFT);
+                // rc.top += 50;
+                // DrawText(hdc, msg2, -1, &rc, DT_TOP | DT_LEFT);
                 
                 EndPaint(hwnd, &ps);
             }
@@ -127,7 +135,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 void setup_game(game_state* state) {
-    state->render_buffer = malloc(WIDTH * HEIGHT * sizeof(wchar_t));
+    state->front_buffer = malloc(WIDTH * HEIGHT * sizeof(wchar_t));
+    state->back_buffer = malloc(WIDTH * HEIGHT * sizeof(wchar_t));
     state->game_snake.length = 2; //just the head and tail
     state->game_snake.max_length = 10; //start with space for 10 segments
     state->game_snake.nodes = malloc(sizeof(node) * state->game_snake.max_length);
@@ -144,8 +153,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     //  __argv, __argc
 
     // Register the window class.
-    const wchar_t CLASS_NAME[]  = L"Snake Main Window";
+    GdiplusStartupInput gdip_input;
+    GdiplusStartupOutput gdip_output;
+    ULONG_PTR gdip_token;
+    GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
     
+    //should move to import_assets function
+    GpImage* test_image;
+    GpStatus gp_status;
+    gp_status = GdipLoadImageFromFile(L"../assets/smiley.png", &test_image);
+    
+    const wchar_t CLASS_NAME[]  = L"Snake Main Window";
     WNDCLASS wc = { };
 
     wc.lpfnWndProc   = WindowProc;
@@ -155,6 +173,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     RegisterClass(&wc);
     
     game_state state = {};
+    state.test_image = test_image;
     setup_game(&state);
 
     // Create the window.
@@ -199,8 +218,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
     //cleanup (not needed, just good practice)
     free(state.game_snake.nodes);
-    free(state.render_buffer);
-    
+    free(state.front_buffer);
+    free(state.back_buffer);
+    GdiplusShutdown(gdip_token);
 
     return 0;       
 }
