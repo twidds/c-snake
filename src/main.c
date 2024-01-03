@@ -152,17 +152,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     //TODO:: Set window size based on command line
     //  __argv, __argc
 
-    // Register the window class.
+    //GDI+ init
     GdiplusStartupInput gdip_input;
+    gdip_input.GdiplusVersion = 1; // Undocumented? Required for it to work correctly.
     GdiplusStartupOutput gdip_output;
     ULONG_PTR gdip_token;
-    GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
+    GpStatus gp_status;
+
+    gp_status = GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
+    if (gp_status != Ok) {
+        return gp_status;
+    }
     
     //should move to import_assets function
     GpImage* test_image;
-    GpStatus gp_status;
     gp_status = GdipLoadImageFromFile(L"../assets/smiley.png", &test_image);
+    if (gp_status != Ok) {
+        return gp_status;
+    }
     
+    // Register the window class.
     const wchar_t CLASS_NAME[]  = L"Snake Main Window";
     WNDCLASS wc = { };
 
