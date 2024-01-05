@@ -118,7 +118,59 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 GdipCreateFromHDC(hdc, &graphics);
 
                 FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW+1));
-                GdipDrawImage(graphics, state->test_image, 0, 0);
+                //GdipDrawImage(graphics, state->test_image, 0, 0);
+                //GdipDrawImageRect(graphics, state->test_image, 
+                //    0, 0, //x, y
+                //    50,50 //width, height
+                //    );
+                UINT img_w;
+                UINT img_h;
+                GdipGetImageWidth(state->test_image, &img_w);
+                GdipGetImageHeight(state->test_image, &img_h);
+
+                GdipDrawImageRectRectI(
+                    graphics,                //GpGraphics *graphics,
+                    state->test_image,       //GpImage *image,
+                    0, 0, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight,
+                    img_w/2, img_h/2, img_w/2, img_h/2,  //INT srcx, INT srcy, INT srcwidth, INT srcheight,
+                    UnitPixel,               //GpUnit srcUnit,
+                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes,
+                    NULL,                    //DrawImageAbort callback,
+                    NULL                     //VOID * callbackData
+                    );
+
+                GdipDrawImageRectRectI(
+                    graphics,                //GpGraphics *graphics,
+                    state->test_image,       //GpImage *image,
+                    img_w/2+10, 0, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight,
+                    img_w/2, 0, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight,
+                    UnitPixel,               //GpUnit srcUnit,
+                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes,
+                    NULL,                    //DrawImageAbort callback,
+                    NULL                     //VOID * callbackData
+                    );
+
+                GdipDrawImageRectRectI(
+                    graphics,                //GpGraphics *graphics, 
+                    state->test_image,       //GpImage *image, 
+                    0, img_h/2+10, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight, 
+                    0, img_h/2, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight, 
+                    UnitPixel,               //GpUnit srcUnit, 
+                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes, 
+                    NULL,                    //DrawImageAbort callback, 
+                    NULL                     //VOID * callbackData
+                    );
+
+                GdipDrawImageRectRectI(
+                    graphics,                //GpGraphics *graphics, 
+                    state->test_image,       //GpImage *image, 
+                    img_w/2+10, img_h/2+10, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight, 
+                    0, 0, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight, 
+                    UnitPixel,               //GpUnit srcUnit, 
+                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes, 
+                    NULL,                    //DrawImageAbort callback, 
+                    NULL                     //VOID * callbackData
+                    );
                 // DrawText(hdc, message, -1, &rc, DT_TOP | DT_LEFT);
                 // rc.top += 50;
                 // DrawText(hdc, msg2, -1, &rc, DT_TOP | DT_LEFT);
