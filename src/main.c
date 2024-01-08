@@ -17,7 +17,7 @@
 #endif
 #include <windows.h>
 #include <gdiplus.h>
-#pragma comment(lib, "gdiplus.lib")
+//#pragma comment(lib, "gdiplus.lib")
 
 #define WIDTH 100
 #define HEIGHT 100
@@ -89,6 +89,67 @@ void render(wchar_t* buffer, void* object){
     }
 }
 
+
+typedef enum RotateType {
+    RotateNone,
+    Rotate90,
+    Rotate180,
+    Rotate270
+} RotateType;
+
+GpStatus DrawImageRectangle(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect) {
+    return GdipDrawImageRectRectI(
+            graphics,                //GpGraphics *graphics,
+            image,       //GpImage *image,
+            dst_rect->X, dst_rect->Y, dst_rect->Width, dst_rect->Height,    //INT dstx, INT dsty, INT dstwidth, INT dstheight,
+            src_rect->X, src_rect->Y, src_rect->Width, src_rect->Height,  //INT srcx, INT srcy, INT srcwidth, INT srcheight,
+            UnitPixel,               //GpUnit srcUnit,
+            NULL,                    //GDIPCONST GpImageAttributes* imageAttributes,
+            NULL,                    //DrawImageAbort callback,
+            NULL                     //VOID * callbackData
+            );
+}
+
+GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect, RotateType rtype) {
+    GpStatus status = Ok;
+
+    switch(rtype) {
+        case RotateNone:
+            GdipTranslateWorldTransform(graphics, dst_rect->X, dst_rect->Y, MatrixOrderAppend);
+            break;
+        case Rotate90:
+            GdipRotateWorldTransform(graphics, 90.0f, MatrixOrderAppend);
+            GdipTranslateWorldTransform(graphics, 
+                (dst_rect->X + dst_rect->Y + dst_rect->Height)*0.999,
+                (dst_rect->Y - dst_rect->X)*0.999,
+                MatrixOrderAppend);
+            break;
+        case Rotate180:
+            GdipRotateWorldTransform(graphics, 180.0f, MatrixOrderAppend);
+            GdipTranslateWorldTransform(graphics, 
+                (2*dst_rect->X + dst_rect->Width)*0.999, 
+                (2*dst_rect->Y + dst_rect->Height)*0.999, 
+                MatrixOrderAppend);
+            break;
+        case Rotate270:
+            GdipRotateWorldTransform(graphics, 270.0f, MatrixOrderAppend);
+            GdipTranslateWorldTransform(graphics,
+                (dst_rect->X - dst_rect->Y)*0.999,
+                (dst_rect->Width + dst_rect->X + dst_rect->Y)*0.999,
+                MatrixOrderAppend);
+            break;
+        default:
+            return InvalidParameter;
+            break;
+    }
+
+    status = DrawImageRectangle(graphics, image, dst_rect, src_rect);
+    
+    if (status != Ok) {return status;}
+    
+    return GdipResetWorldTransform(graphics);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     //on window creation, set game state pointer
     if (uMsg == WM_CREATE) {
@@ -123,54 +184,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 //    0, 0, //x, y
                 //    50,50 //width, height
                 //    );
-                UINT img_w;
-                UINT img_h;
-                GdipGetImageWidth(state->test_image, &img_w);
-                GdipGetImageHeight(state->test_image, &img_h);
+                GpRect img_rect = {};
+                GdipGetImageWidth(state->test_image, &(img_rect.Width));
+                GdipGetImageHeight(state->test_image, &(img_rect.Height));
 
-                GdipDrawImageRectRectI(
-                    graphics,                //GpGraphics *graphics,
-                    state->test_image,       //GpImage *image,
-                    0, 0, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight,
-                    img_w/2, img_h/2, img_w/2, img_h/2,  //INT srcx, INT srcy, INT srcwidth, INT srcheight,
-                    UnitPixel,               //GpUnit srcUnit,
-                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes,
-                    NULL,                    //DrawImageAbort callback,
-                    NULL                     //VOID * callbackData
-                    );
+                //GpStatus WINGDIPAPI GdipDrawImagePoints(GpGraphics *graphics, GpImage *image, GDIPCONST GpPointF *dstpoints, INT count)
+                GpRect dst_rect = {};
+                dst_rect.Width = 200;
+                dst_rect.Height = 200;
 
-                GdipDrawImageRectRectI(
-                    graphics,                //GpGraphics *graphics,
-                    state->test_image,       //GpImage *image,
-                    img_w/2+10, 0, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight,
-                    img_w/2, 0, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight,
-                    UnitPixel,               //GpUnit srcUnit,
-                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes,
-                    NULL,                    //DrawImageAbort callback,
-                    NULL                     //VOID * callbackData
-                    );
+                DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
+                dst_rect.X = dst_rect.Width;
+                DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
+                dst_rect.X = 0;
+                dst_rect.Y = dst_rect.Height;
+                DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
+                dst_rect.X = dst_rect.Width;
+                DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
 
-                GdipDrawImageRectRectI(
-                    graphics,                //GpGraphics *graphics, 
-                    state->test_image,       //GpImage *image, 
-                    0, img_h/2+10, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight, 
-                    0, img_h/2, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight, 
-                    UnitPixel,               //GpUnit srcUnit, 
-                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes, 
-                    NULL,                    //DrawImageAbort callback, 
-                    NULL                     //VOID * callbackData
-                    );
+                dst_rect.X = 2*dst_rect.Width; dst_rect.Y = 2*dst_rect.Height;
+                DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
 
-                GdipDrawImageRectRectI(
-                    graphics,                //GpGraphics *graphics, 
-                    state->test_image,       //GpImage *image, 
-                    img_w/2+10, img_h/2+10, img_w/2, img_h/2,      //INT dstx, INT dsty, INT dstwidth, INT dstheight, 
-                    0, 0, img_w/2, img_h/2,      //INT srcx, INT srcy, INT srcwidth, INT srcheight, 
-                    UnitPixel,               //GpUnit srcUnit, 
-                    NULL,                    //GDIPCONST GpImageAttributes* imageAttributes, 
-                    NULL,                    //DrawImageAbort callback, 
-                    NULL                     //VOID * callbackData
-                    );
                 // DrawText(hdc, message, -1, &rc, DT_TOP | DT_LEFT);
                 // rc.top += 50;
                 // DrawText(hdc, msg2, -1, &rc, DT_TOP | DT_LEFT);
