@@ -18,7 +18,6 @@
 #endif
 #include <windows.h>
 #include <gdiplus.h>
-//#pragma comment(lib, "gdiplus.lib")
 
 //TODO:: Make size dynamic, use these for min sizes.
 #define MIN_WIDTH 10
@@ -29,17 +28,6 @@
 
 #define WIDTH 800
 #define HEIGHT 800
-
-
-// typedef enum SnakeObjectType {
-//     INVALID,
-//     APPLE,
-//     SNAKE,
-//     SNAKE_HEAD,
-//     SNAKE_TAIL,
-//     SNAKE_BODY,
-//     TYPE_END
-// } SnakeObjectType;
 
 typedef enum Direction {
     UP,
@@ -64,47 +52,41 @@ typedef struct Snake {
     int max_length;
 } Snake;
 
+typedef struct CmdConfig {
+    int window_x;
+    int window_y;
+    int board_x;
+    int board_y;
+} CmdConfig;
 
 typedef struct GameState {
     bool show_stats;
-    int n_frames;
+    int n_renders;
+    int n_draws;
     bool paused;
+    bool pause_pending;
     bool running;
     unsigned int score;
-    // Direction move_dir;
-    GpImage* spritesheet;
-    // wchar_t* front_buffer;
-    // wchar_t* back_buffer;
+    POINT window_size;
+    POINT board_size;
     Snake game_snake;
     Node apple;
+    
+    //Graphics
+    GpImage* spritesheet;
+    GpImage* drawbuffer;
 } GameState;
 
 void setconsole(int w, int h);
 
 void clearconsole();
 
-void swap_buffers(wchar_t** bufa, wchar_t** bufb) {
-    wchar_t* tmp = *bufa;
+//sets bufa to bufb, then bufb to old bufa
+void swap_buffers(void** bufa, void** bufb) {
+    void* tmp = *bufa;
     *bufa = *bufb;
     *bufb = tmp;
 }
-
-// void render(wchar_t* buffer, void* object){
-//     enum SnakeObjectType* t = object;
-//     switch(*t) {
-//         case APPLE:
-//             break;
-//         case SNAKE:
-//             break;
-//         case SNAKE_HEAD:
-//             break;
-//         case SNAKE_BODY:
-//             break;
-//         case SNAKE_TAIL:
-//             break;
-//     }
-// }
-
 
 typedef enum RotateType {
     RotateNone,
@@ -112,6 +94,12 @@ typedef enum RotateType {
     Rotate180,
     Rotate270
 } RotateType;
+
+
+ARGB make_ARGB(BYTE a, BYTE r, BYTE g, BYTE b) {
+    return a << 24 | r << 16 | g << 8 | b;
+}
+
 
 GpStatus DrawImageRectangle(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect) {
     return GdipDrawImageRectRectI(
@@ -171,7 +159,13 @@ LRESULT PaintWindow(HWND hwnd, GameState* state) {
     // const wchar_t* message = L"WWWWWWWWWW";
     // const wchar_t* msg2 = L"\U000021D7 wwwwwwwwww";
     // printf("paint call\r\n");
-    state->n_frames++;
+    if (!state->spritesheet) {
+        return 0;
+    }
+    GpStatus status;
+
+    //Put draw from cached bitmap here:
+    state->n_draws++;
     PAINTSTRUCT ps;
     RECT rc;
     InvalidateRgn(hwnd, NULL, FALSE);
@@ -179,50 +173,29 @@ LRESULT PaintWindow(HWND hwnd, GameState* state) {
     HDC hdc = BeginPaint(hwnd, &ps);
 
     GpGraphics* graphics;
-    GdipCreateFromHDC(hdc, &graphics);
-    GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
+    status = GdipCreateFromHDC(hdc, &graphics);
+    status = GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
 
-    FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW+1));
-    //GdipDrawImage(graphics, state->test_image, 0, 0);
-    //GdipDrawImageRect(graphics, state->test_image, 
-    //    0, 0, //x, y
-    //    50,50 //width, height
-    //    );
-    GpRect img_rect = {};
-    GdipGetImageWidth(state->spritesheet, &(img_rect.Width));
-    GdipGetImageHeight(state->spritesheet, &(img_rect.Height));
+    // status = GdipDrawCachedBitmap(graphics, state->drawbuffer, 0, 0);
+    status = GdipDrawImage(graphics, state->drawbuffer, 0, 0);
 
-    //GpStatus WINGDIPAPI GdipDrawImagePoints(GpGraphics *graphics, GpImage *image, GDIPCONST GpPointF *dstpoints, INT count)
-    GpRect dst_rect = {};
-    dst_rect.Width = img_rect.Width * 5;
-    dst_rect.Height = img_rect.Height * 5;
-
-    img_rect.X = 0;
-    img_rect.Y = 0;
-    //img_rect.Width = 200;
-    //img_rect.Height = 250;
-    
-
-    DrawImageRectangle(graphics, state->spritesheet, &dst_rect, &img_rect);
-
-    // DrawRotatedImage(graphics, state->test_image, &dst_rect, &img_rect, Rotate270);
-
-    
-    //Debug
-    
+    //draw stats
     if (state->show_stats) {
-        char framecount[30];
-        wchar_t framecountW[30];
-        strcpy(framecount, "frames: ");
-        int index = strlen(framecount);
-        itoa(state->n_frames, &framecount[index], 10);
-        MultiByteToWideChar(CP_UTF8, 0, framecount, -1, framecountW, 30);
-        DrawText(hdc, framecountW, -1, &rc, DT_TOP | DT_LEFT);
+        char statstring[30];
+        wchar_t statstringW[30];
+        
+        sprintf(statstring, "draws: %i", state->n_draws);
+        MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
+        rc.top += DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);
+
+        sprintf(statstring, "renders: %i", state->n_renders);
+        MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
+        DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);
     }
     
     EndPaint(hwnd, &ps);
-return 0;
-
+    GdipDeleteGraphics(graphics);
+    return 0;
 }
 
 LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
@@ -233,6 +206,7 @@ LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
             break;
         case 'P': //pause
             state->paused = !(state->paused);
+            state->pause_pending = state->paused;
             break;
         case 'S': //stats
             state->show_stats = !(state->show_stats);
@@ -304,23 +278,28 @@ void realloc_snake_nodes(Snake* snake) {
     snake->nodes = new_nodes;
 }
 
-int setup_game(GameState* state) {
+int setup_game(GameState* state, CmdConfig* config) {
+    //graphics to fill in later
+    state->drawbuffer = NULL;
+    state->spritesheet = NULL;
+
+    //from cmd line
+    state->window_size.x = config->window_x;
+    state->window_size.y = config->window_y;
+    state->board_size.x = config->board_x;
+    state->board_size.y = config->board_y;
     
-    //gp_status = GdipLoadImageFromFile(L"../assets/smiley.png", &test_image);
-    GpStatus gp_status = GdipLoadImageFromFile(L"../assets/spritesheet.bmp", &(state->spritesheet));
-    if (gp_status != Ok) {
-        return gp_status;
-    }
-    
+    //game initial state
     state->running = true;
     state->paused = false;
     state->score = 0;
-    state->n_frames = 0;
-    state->show_stats = false;
+    state->n_draws = 0;
+    state->n_renders = 0;
+    state->show_stats = true;
     
     //setup snake
-    int start_x = BOARD_WIDTH/2;
-    int start_y = BOARD_HEIGHT/2;
+    int start_x = state->board_size.x/2;
+    int start_y = state->board_size.y/2;
     int max_nodes = 10;
 
     Snake* snake = &(state->game_snake);
@@ -329,9 +308,11 @@ int setup_game(GameState* state) {
     snake->buffered_dir = LEFT;
     snake->move_dir = LEFT;
     snake->length = 2;
+
     //tail
     snake->nodes[0].x_pos = start_x;
     snake->nodes[0].y_pos = start_y;
+
     //head
     snake->nodes[1].x_pos = start_x - 1;
     snake->nodes[1].y_pos = start_y;
@@ -339,26 +320,120 @@ int setup_game(GameState* state) {
     return 0;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
-    //TODO:: Set window size based on command line
-    //  __argv, __argc
+GpStatus render_pause (GameState* state, HWND hwnd) {
+    //TODO:: Implement on pause action
+    //Use existing buffer
+    //Draw translucent black over it
+    //Draw text saying "PAUSED"
+
+    return Ok;
+}
+
+GpStatus render_game(GameState* state, HWND hwnd) {
+    state->n_renders++;
+    int gdi_status = 0;
+    GpStatus status = Ok;
     
+    //Setup memory HDC to draw into
+    HDC hdc_win = GetDC(hwnd);
+    HBITMAP h_bmap = CreateCompatibleBitmap(hdc_win, state->window_size.x, state->window_size.y);
+    HDC hdc_mem = CreateCompatibleDC(hdc_win);
+    HBITMAP old_bmap = SelectObject(hdc_mem, h_bmap); //swap in bitmap
+
+    //Draw image
+    GpGraphics* graphics;
+    GdipCreateFromHDC(hdc_mem, &graphics);
+    GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
+
+    GpSolidFill* solidfill;
+    status = GdipCreateSolidFill(make_ARGB(190, 190, 190, 255), &solidfill);
+    status = GdipFillRectangleI(graphics, solidfill, 0, 0, state->window_size.x, state->window_size.y);
+
+    GpRect img_rect = {};
+    GdipGetImageWidth(state->spritesheet, &(img_rect.Width));
+    GdipGetImageHeight(state->spritesheet, &(img_rect.Height));
+
+    GpRect dst_rect = {};
+    dst_rect.Width = img_rect.Width * 5;
+    dst_rect.Height = img_rect.Height * 5;
+
+    img_rect.X = 0;
+    img_rect.Y = 0;
+    status = DrawImageRectangle(graphics, state->spritesheet, &dst_rect, &img_rect);
+
+    //Save bitmap into game state buffer
+    h_bmap = SelectObject(hdc_mem, old_bmap); //swap out bitmap
+    HPALETTE h_pal =  GetCurrentObject(hdc_win, OBJ_PAL);
+    
+    GpBitmap* bitmap;
+    status = GdipCreateBitmapFromHBITMAP(h_bmap, h_pal, &bitmap);
+
+    //Clear old frame
+    swap_buffers(&(state->drawbuffer), &bitmap);
+    if (bitmap) {
+        GdipDisposeImage(state->drawbuffer);
+    }
+
+    //Cache new frame
+    // GpGraphics* graphics_win;
+    // GdipCreateFromHDC(hdc_win, &graphics_win);
+    // status = GdipCreateCachedBitmap( bitmap, graphics_win, &state->drawbuffer );
+
+    //CLEANUP
+    GdipDeleteGraphics(graphics);
+    GdipDeleteBrush(solidfill);
+
+    DeleteObject(h_bmap);
+    DeleteDC(hdc_mem);
+
+    return Ok;
+}
+
+int parse_cmdline(CmdConfig* config) {
+    //TODO:: Set window size based on command line
+    //uses __argv, __argc, feels like cheating
+
+    config->window_x = WIDTH;
+    config->window_y = HEIGHT;
+    config->board_x = BOARD_WIDTH;
+    config->board_y = BOARD_HEIGHT;
+    
+    return 0;
+}
+
+int setup_graphics(GameState* state, HWND hwnd) {
+    GpStatus gp_status = GdipLoadImageFromFile(L"../assets/spritesheet.bmp", &(state->spritesheet));
+    if (gp_status != Ok) {
+        return gp_status;
+    }
+
+    render_game(state, hwnd);
+    return Ok;
+}
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
     //GDI+ init
     GdiplusStartupInput gdip_input;
     gdip_input.GdiplusVersion = 1; // Required for proper gdip startup.
     GdiplusStartupOutput gdip_output;
     ULONG_PTR gdip_token;
     GpStatus gp_status;
+    int setup_status;
 
     gp_status = GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
     if (gp_status != Ok) {
         return gp_status;
     }
-
+    
+    CmdConfig config;
+    setup_status = parse_cmdline(&config);
+    if (setup_status) {
+        return setup_status;
+    }
+    
     //Setup game state
-    GpRect windowBounds = {0, 0, WIDTH, HEIGHT}; //X, Y, Width, Height
-    GameState state = {};
-    int setup_status = setup_game(&state);
+    GameState state;
+    setup_status = setup_game(&state, &config);
     if (setup_status != 0) {
         return setup_status;
     }
@@ -393,11 +468,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
         hwnd,          //HWND hWnd,
         HWND_TOP,           //HWND hWndInsertAfter,
         0, 0,         //int  X,Y,
-        WIDTH, HEIGHT,            //int  cx,cy,
+        state.window_size.x, state.window_size.y,            //int  cx,cy,
         SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE         //UINT uFlags
         );
 
     ShowWindow(hwnd, nCmdShow);
+
+    setup_status = setup_graphics(&state, hwnd);
+    if (setup_status != 0) {
+        return setup_status;
+    }
 
     //Game loop start
     MSG msg;
@@ -409,28 +489,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
             DispatchMessage(&msg);
         }
 
-        //Render to some target buffer? Probably a global...
+        //handle pause evt
+
+        //every x frames:
+            //Move stuff
+            //Handle collisions
+            //Lose screen?
+            //re-render
         
         //Redraw Window
         // InvalidateRgn(hwnd, NULL, FALSE);
         // UpdateWindow(hwnd);
         
-
         //Set timer to remaining time for vsync (Use SetTimer winapi to trigger an event?)
-        Sleep(10);
+        Sleep(20);
         
     }
 
     PostQuitMessage(0);
 
-
-    
-    //Game loop end
-
     //cleanup (not needed, just good practice)
     free(state.game_snake.nodes);
-    // free(state.front_buffer);
-    // free(state.back_buffer);
     GdiplusShutdown(gdip_token);
 
     return 0;       
