@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <time.h>
 
 //UNICODE: all winapi functions default to W instead of A
 #ifndef UNICODE
@@ -66,13 +67,34 @@ typedef enum GameStats {
     STAT_N_RENDERS,
     STAT_N_DRAWS,
     STAT_FPS,
+    STAT_FRAME_MS,
+    STAT_MSG_MS,
+    STAT_PAINT_MS,
+    STAT_RENDER_MS,
     STAT_COUNT
 } GameStats;
-const char* stat_strings[STAT_COUNT] = {"# renders: %d", "# draws: %d", "fps: %d"};
+const char* STAT_STRINGS[STAT_COUNT] = {
+    "# renders: %d", 
+    "# draws: %d", 
+    "fps: %d", 
+    "frame ms: %d",
+    "msg ms: %d", 
+    "paint ms: %d",
+    "render ms: %d",
+    };
+
+#define N_TRACKED_FRAMES 10
+typedef struct FpsTimer {
+    int cur_fps;
+    int cur_index;
+    clock_t frame_times[N_TRACKED_FRAMES];
+} FpsTimer;
 
 typedef struct GameState {
     bool game_flags[FLAGS_COUNT];
     int game_stats[STAT_COUNT];
+    FpsTimer fps_timer;
+    LARGE_INTEGER clock_freq;
     int score;
 
     POINT window_size;
@@ -85,9 +107,24 @@ typedef struct GameState {
     GpImage* drawbuffer;
 } GameState;
 
-void setconsole(int w, int h);
+void update_fps(clock_t latest, FpsTimer* fps_timer) {
+    fps_timer->cur_index++;
+    if (fps_timer->cur_index == N_TRACKED_FRAMES) {
+        fps_timer->cur_index = 0;
+    }
 
-void clearconsole();
+    fps_timer->frame_times[fps_timer->cur_index] = latest;
+    clock_t sum = 0;
+    for (int i = 0; i < N_TRACKED_FRAMES; i++) {
+        sum += fps_timer->frame_times[i];
+    }
+
+    if (sum == 0) {
+        fps_timer->cur_fps = 0;
+    } else {
+        fps_timer->cur_fps = CLOCKS_PER_SEC * N_TRACKED_FRAMES / sum;
+    }
+}
 
 //sets bufa to bufb, then bufb to old bufa
 void swap_buffers(void** bufa, void** bufb) {
@@ -164,14 +201,16 @@ GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect
 
 
 LRESULT PaintWindow(HWND hwnd, GameState* state) {
+    LARGE_INTEGER paint_start; LARGE_INTEGER paint_end;
+    QueryPerformanceCounter(&paint_start);
     GpStatus gp_status;
 
     //Put draw from cached bitmap here:
     state->game_stats[STAT_N_DRAWS]++;
     PAINTSTRUCT ps;
-    RECT rc;
+    // RECT rc;
     InvalidateRgn(hwnd, NULL, FALSE);
-    GetClientRect(hwnd, &rc);
+    // GetClientRect(hwnd, &rc);
     HDC hdc = BeginPaint(hwnd, &ps);
 
     GpGraphics* graphics;
@@ -180,21 +219,13 @@ LRESULT PaintWindow(HWND hwnd, GameState* state) {
 
     // gp_status = GdipDrawCachedBitmap(graphics, state->drawbuffer, 0, 0);
     gp_status = GdipDrawImage(graphics, state->drawbuffer, 0, 0);
-
-    //draw stats
-    if (state->game_flags[FLAG_SHOW_STATS]) {
-        char statstring[30];
-        wchar_t statstringW[30];
-        
-        for (int i = 0; i < STAT_COUNT; i++) {
-            sprintf(statstring, stat_strings[i], state->game_stats[i]);
-            MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
-            rc.top += DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);    
-        }
-    }
     
     EndPaint(hwnd, &ps);
     GdipDeleteGraphics(graphics);
+
+    QueryPerformanceCounter(&paint_end);
+    state->game_stats[STAT_PAINT_MS] = 1000 * (paint_end.QuadPart - paint_start.QuadPart) / state->clock_freq.QuadPart;
+
     return 0;
 }
 
@@ -205,11 +236,11 @@ LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
             state->game_flags[FLAG_RUNNING] = false;
             break;
         case 'P': //pause
-            state->game_stats[FLAG_PAUSED] = !(state->game_stats[FLAG_PAUSED]);
-            state->game_stats[FLAG_PAUSING] = state->game_stats[FLAG_PAUSED];
+            state->game_flags[FLAG_PAUSED] = !(state->game_flags[FLAG_PAUSED]);
+            state->game_flags[FLAG_PAUSING] = state->game_flags[FLAG_PAUSED];
             break;
         case 'S': //stats
-            state->game_stats[FLAG_SHOW_STATS] = !(state->game_stats[FLAG_SHOW_STATS]);
+            state->game_flags[FLAG_SHOW_STATS] = !(state->game_flags[FLAG_SHOW_STATS]);
             break;
     }
 
@@ -277,6 +308,8 @@ void realloc_snake_nodes(Snake* snake) {
 }
 
 int setup_game(GameState* state, CmdConfig* config) {
+    QueryPerformanceFrequency(&state->clock_freq);
+
     //from cmd line
     state->window_size.x = config->window_x;
     state->window_size.y = config->window_y;
@@ -358,6 +391,19 @@ GpStatus render_game(GameState* state, HWND hwnd) {
     img_rect.Y = 0;
     status = DrawImageRectangle(graphics, state->spritesheet, &dst_rect, &img_rect);
 
+    //draw stats
+    RECT text_rect = {0, 0, state->window_size.x, state->window_size.y}; // LEFT,TOP,RIGHT,BOT
+    if (state->game_flags[FLAG_SHOW_STATS]) {
+        char statstring[30];
+        wchar_t statstringW[30];
+        
+        for (int i = 0; i < STAT_COUNT; i++) {
+            sprintf(statstring, STAT_STRINGS[i], state->game_stats[i]);
+            MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
+            text_rect.top += DrawText(hdc_mem, statstringW, -1, &text_rect, DT_TOP | DT_LEFT);
+        }
+    }
+
     //Save bitmap into game state buffer
     h_bmap = SelectObject(hdc_mem, old_bmap); //swap out bitmap
     HPALETTE h_pal =  GetCurrentObject(hdc_win, OBJ_PAL);
@@ -368,7 +414,7 @@ GpStatus render_game(GameState* state, HWND hwnd) {
     //Clear old frame
     swap_buffers(&(state->drawbuffer), &bitmap);
     if (bitmap) {
-        GdipDisposeImage(state->drawbuffer);
+        GdipDisposeImage(bitmap);
     }
 
     //Cache new frame
@@ -485,13 +531,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
     //Game loop start
     MSG msg;
+    
     while(state.game_flags[FLAG_RUNNING]) {
+        // LARGE_INTEGER f_start; LARGE_INTEGER f_end;
+        LARGE_INTEGER msg_start; LARGE_INTEGER msg_end;
+        LARGE_INTEGER rndr_start; LARGE_INTEGER rndr_end;
+        clock_t f_start = clock();
+
 
         //Process message queue
+        QueryPerformanceCounter(&msg_start);
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {  // Change to PeekMessage to make non-blocking
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+        QueryPerformanceCounter(&msg_end);
+        state.game_stats[STAT_MSG_MS] = 1000 * (msg_end.QuadPart - msg_start.QuadPart) / state.clock_freq.QuadPart;
 
         //handle pause evt
 
@@ -501,13 +556,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
             //Lose screen?
             //re-render
         
+        QueryPerformanceCounter(&rndr_start);
+        render_game(&state,hwnd);
+        QueryPerformanceCounter(&rndr_end);
+        state.game_stats[STAT_RENDER_MS] = 1000 * (rndr_end.QuadPart - rndr_start.QuadPart) / state.clock_freq.QuadPart;
+
         //Redraw Window
-        // InvalidateRgn(hwnd, NULL, FALSE);
-        // UpdateWindow(hwnd);
+        InvalidateRgn(hwnd, NULL, FALSE);
+        UpdateWindow(hwnd);
         
         //Set timer to remaining time for vsync (Use SetTimer winapi to trigger an event?)
-        Sleep(20);
-        
+        Sleep(100);
+
+        clock_t f_end = clock();
+        update_fps(f_end - f_start, &state.fps_timer);
+        state.game_stats[STAT_FPS] = state.fps_timer.cur_fps;
+        // state.game_stats[STAT_FRAME_MS] = 1000 * (f_end - f_start)/CLOCKS_PER_SEC;
+        state.game_stats[STAT_FRAME_MS] = f_end - f_start;
     }
     PostQuitMessage(0);
 
