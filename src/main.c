@@ -1,18 +1,12 @@
 //References for future stuffs:
-    //UTF-8 in WINAPI: https://stackoverflow.com/questions/8831143/windows-api-ansi-functions-and-utf-8
+    //  UTF-8 in WINAPI: https://stackoverflow.com/questions/8831143/windows-api-ansi-functions-and-utf-8
     //  https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar
     //  GetCommandLine -> GetCommandLineW
-    //  MultiByteToWideChar
-    //  Convert UTF-8 to UTF-16 before passing to WinAPI
-    //  Should probably use W version of all WinAPI calls (A gets converted to W eventually anyway)
-
 
 #include <stdio.h>
 #include <stdbool.h>
-//#include <string.h>
-//#include <malloc.h>
-//#define WIN32_LEAN_AND_MEAN
 
+//UNICODE: all winapi functions default to W instead of A
 #ifndef UNICODE
     #define UNICODE
 #endif
@@ -20,31 +14,32 @@
 #include <gdiplus.h>
 
 //TODO:: Make size dynamic, use these for min sizes.
-#define MIN_WIDTH 10
-#define MIN_HEIGHT 10
+#define MIN_BOARD_WIDTH 10
+#define MIN_BOARD_HEIGHT 10
+
+#define MIN_WINDOW_WIDTH 100
+#define MIN_WINDOW_HEIGHT 100
 
 #define BOARD_WIDTH 50
 #define BOARD_HEIGHT 50
 
-#define WIDTH 800
-#define HEIGHT 800
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 800
+
 
 typedef enum Direction {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT
+    DIR_UP,
+    DIR_DOWN,
+    DIR_LEFT,
+    DIR_RIGHT
 } Direction;
 
 typedef struct Node {
-    // SnakeObjectType type;
-    // Direction facing;
     int x_pos;
     int y_pos;
 } Node;
 
 typedef struct Snake {
-    // SnakeObjectType type;
     Direction buffered_dir;
     Direction move_dir;
     Node* nodes; //points at tail
@@ -59,19 +54,32 @@ typedef struct CmdConfig {
     int board_y;
 } CmdConfig;
 
+typedef enum GameFlag {
+    FLAG_RUNNING,
+    FLAG_PAUSED,
+    FLAG_PAUSING,
+    FLAG_SHOW_STATS,
+    FLAGS_COUNT
+} GameFlag;
+
+typedef enum GameStats {
+    STAT_N_RENDERS,
+    STAT_N_DRAWS,
+    STAT_FPS,
+    STAT_COUNT
+} GameStats;
+const char* stat_strings[STAT_COUNT] = {"# renders: %d", "# draws: %d", "fps: %d"};
+
 typedef struct GameState {
-    bool show_stats;
-    int n_renders;
-    int n_draws;
-    bool paused;
-    bool pause_pending;
-    bool running;
-    unsigned int score;
+    bool game_flags[FLAGS_COUNT];
+    int game_stats[STAT_COUNT];
+    int score;
+
     POINT window_size;
     POINT board_size;
     Snake game_snake;
     Node apple;
-    
+
     //Graphics
     GpImage* spritesheet;
     GpImage* drawbuffer;
@@ -115,7 +123,7 @@ GpStatus DrawImageRectangle(GpGraphics* graphics, GpImage* image, GpRect* dst_re
 }
 
 GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect, RotateType rtype) {
-    GpStatus status = Ok;
+    GpStatus gp_status = Ok;
 
     switch(rtype) {
         case RotateNone:
@@ -147,25 +155,19 @@ GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect
             break;
     }
 
-    status = DrawImageRectangle(graphics, image, dst_rect, src_rect);
+    gp_status = DrawImageRectangle(graphics, image, dst_rect, src_rect);
+    if (gp_status != Ok) {return gp_status;}
     
-    if (status != Ok) {return status;}
-    
-    return GdipResetWorldTransform(graphics);
+    gp_status = GdipResetWorldTransform(graphics);
+    return gp_status;
 }
 
 
 LRESULT PaintWindow(HWND hwnd, GameState* state) {
-    // const wchar_t* message = L"WWWWWWWWWW";
-    // const wchar_t* msg2 = L"\U000021D7 wwwwwwwwww";
-    // printf("paint call\r\n");
-    if (!state->spritesheet) {
-        return 0;
-    }
-    GpStatus status;
+    GpStatus gp_status;
 
     //Put draw from cached bitmap here:
-    state->n_draws++;
+    state->game_stats[STAT_N_DRAWS]++;
     PAINTSTRUCT ps;
     RECT rc;
     InvalidateRgn(hwnd, NULL, FALSE);
@@ -173,24 +175,22 @@ LRESULT PaintWindow(HWND hwnd, GameState* state) {
     HDC hdc = BeginPaint(hwnd, &ps);
 
     GpGraphics* graphics;
-    status = GdipCreateFromHDC(hdc, &graphics);
-    status = GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
+    gp_status = GdipCreateFromHDC(hdc, &graphics);
+    gp_status = GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
 
-    // status = GdipDrawCachedBitmap(graphics, state->drawbuffer, 0, 0);
-    status = GdipDrawImage(graphics, state->drawbuffer, 0, 0);
+    // gp_status = GdipDrawCachedBitmap(graphics, state->drawbuffer, 0, 0);
+    gp_status = GdipDrawImage(graphics, state->drawbuffer, 0, 0);
 
     //draw stats
-    if (state->show_stats) {
+    if (state->game_flags[FLAG_SHOW_STATS]) {
         char statstring[30];
         wchar_t statstringW[30];
         
-        sprintf(statstring, "draws: %i", state->n_draws);
-        MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
-        rc.top += DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);
-
-        sprintf(statstring, "renders: %i", state->n_renders);
-        MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
-        DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);
+        for (int i = 0; i < STAT_COUNT; i++) {
+            sprintf(statstring, stat_strings[i], state->game_stats[i]);
+            MultiByteToWideChar(CP_UTF8, 0, statstring, -1, statstringW, 30);
+            rc.top += DrawText(hdc, statstringW, -1, &rc, DT_TOP | DT_LEFT);    
+        }
     }
     
     EndPaint(hwnd, &ps);
@@ -202,40 +202,40 @@ LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
     
     switch(wParam) { //special keys
         case VK_ESCAPE: //exit
-            state->running = false;
+            state->game_flags[FLAG_RUNNING] = false;
             break;
         case 'P': //pause
-            state->paused = !(state->paused);
-            state->pause_pending = state->paused;
+            state->game_stats[FLAG_PAUSED] = !(state->game_stats[FLAG_PAUSED]);
+            state->game_stats[FLAG_PAUSING] = state->game_stats[FLAG_PAUSED];
             break;
         case 'S': //stats
-            state->show_stats = !(state->show_stats);
+            state->game_stats[FLAG_SHOW_STATS] = !(state->game_stats[FLAG_SHOW_STATS]);
             break;
     }
 
-    if (state->paused) { //skip rest of keys
+    if (state->game_flags[FLAG_PAUSED]) { //skip rest of keys
         return 0;
     }
     
     switch(wParam) { //gameplay keys
         case VK_LEFT:
-            if (state->game_snake.move_dir != RIGHT) {
-                state->game_snake.buffered_dir = LEFT;
+            if (state->game_snake.move_dir != DIR_RIGHT) {
+                state->game_snake.buffered_dir = DIR_LEFT;
             }
             break;
         case VK_UP:
-            if (state->game_snake.move_dir != DOWN) {
-                state->game_snake.buffered_dir = UP;
+            if (state->game_snake.move_dir != DIR_DOWN) {
+                state->game_snake.buffered_dir = DIR_UP;
             }
             break;
         case VK_RIGHT:
-            if (state->game_snake.move_dir != LEFT) {
-                state->game_snake.buffered_dir = RIGHT;
+            if (state->game_snake.move_dir != DIR_LEFT) {
+                state->game_snake.buffered_dir = DIR_RIGHT;
             }
             break;
         case VK_DOWN:
-            if (state->game_snake.move_dir != UP) {
-                state->game_snake.buffered_dir = DOWN;
+            if (state->game_snake.move_dir != DIR_UP) {
+                state->game_snake.buffered_dir = DIR_DOWN;
             }
             break;
     }
@@ -258,13 +258,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_ERASEBKGND:
             return TRUE;
         case WM_DESTROY:
-            // PostQuitMessage(0);
-            state->running = false;
+            state->game_flags[FLAG_RUNNING] = false;
             return 0;
         case WM_PAINT:
             return PaintWindow(hwnd, state);
         case WM_KEYDOWN:
-            //Check if arrow keys and handle changing snake direction
             return HandleKeys(hwnd, state, wParam, lParam);
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -279,10 +277,6 @@ void realloc_snake_nodes(Snake* snake) {
 }
 
 int setup_game(GameState* state, CmdConfig* config) {
-    //graphics to fill in later
-    state->drawbuffer = NULL;
-    state->spritesheet = NULL;
-
     //from cmd line
     state->window_size.x = config->window_x;
     state->window_size.y = config->window_y;
@@ -290,12 +284,14 @@ int setup_game(GameState* state, CmdConfig* config) {
     state->board_size.y = config->board_y;
     
     //game initial state
-    state->running = true;
-    state->paused = false;
-    state->score = 0;
-    state->n_draws = 0;
-    state->n_renders = 0;
-    state->show_stats = true;
+    state->game_flags[FLAG_RUNNING] = true;
+    state->game_flags[FLAG_PAUSED] = false;
+    state->game_flags[FLAG_SHOW_STATS] = true;
+
+    //Shouldn't be needed, memory is zeroed
+    // state->game_stats[STAT_SCORE] = 0;
+    // state->game_stats[STAT_N_DRAWS] = 0;
+    // state->game_stats[STAT_N_RENDERS] = 0;
     
     //setup snake
     int start_x = state->board_size.x/2;
@@ -305,8 +301,8 @@ int setup_game(GameState* state, CmdConfig* config) {
     Snake* snake = &(state->game_snake);
     snake->max_length = max_nodes;
     snake->nodes = malloc(sizeof(Node) * max_nodes);
-    snake->buffered_dir = LEFT;
-    snake->move_dir = LEFT;
+    snake->buffered_dir = DIR_LEFT;
+    snake->move_dir = DIR_LEFT;
     snake->length = 2;
 
     //tail
@@ -330,7 +326,8 @@ GpStatus render_pause (GameState* state, HWND hwnd) {
 }
 
 GpStatus render_game(GameState* state, HWND hwnd) {
-    state->n_renders++;
+    // state->n_renders++;
+    state->game_stats[STAT_N_RENDERS]++;
     int gdi_status = 0;
     GpStatus status = Ok;
     
@@ -393,10 +390,18 @@ int parse_cmdline(CmdConfig* config) {
     //TODO:: Set window size based on command line
     //uses __argv, __argc, feels like cheating
 
-    config->window_x = WIDTH;
-    config->window_y = HEIGHT;
+    config->window_x = WINDOW_WIDTH;
+    config->window_y = WINDOW_HEIGHT;
     config->board_x = BOARD_WIDTH;
     config->board_y = BOARD_HEIGHT;
+    
+    if (config->window_x < MIN_WINDOW_WIDTH || config->window_y < MIN_WINDOW_HEIGHT) {
+        return 1;
+    }
+
+    if (config->board_x < MIN_BOARD_WIDTH || config->board_y < MIN_BOARD_HEIGHT) {
+        return 2;
+    }
     
     return 0;
 }
@@ -419,11 +424,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     ULONG_PTR gdip_token;
     GpStatus gp_status;
     int setup_status;
-
-    gp_status = GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
-    if (gp_status != Ok) {
-        return gp_status;
-    }
     
     CmdConfig config;
     setup_status = parse_cmdline(&config);
@@ -432,10 +432,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     }
     
     //Setup game state
-    GameState state;
+    GameState state = {};
     setup_status = setup_game(&state, &config);
     if (setup_status != 0) {
         return setup_status;
+    }
+
+    gp_status = GdiplusStartup(&gdip_token, &gdip_input, &gdip_output);
+    if (gp_status != Ok) {
+        return gp_status;
     }
 
     // Register the window class.
@@ -451,7 +456,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
         L"Snake",    // Window text
-        //WS_OVERLAPPEDWINDOW,            // Window style
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,    // Window style
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, // dwStyle, X, Y, nWidth, nHeight
         NULL,       // Parent window    
@@ -481,7 +485,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
     //Game loop start
     MSG msg;
-    while(state.running) {
+    while(state.game_flags[FLAG_RUNNING]) {
 
         //Process message queue
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {  // Change to PeekMessage to make non-blocking
@@ -505,7 +509,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
         Sleep(20);
         
     }
-
     PostQuitMessage(0);
 
     //cleanup (not needed, just good practice)
