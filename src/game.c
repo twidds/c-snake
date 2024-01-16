@@ -1,6 +1,9 @@
 #include <time.h>
 #include <stdio.h>
 
+#ifndef UNICODE
+    #define UNICODE
+#endif
 #include <windows.h>
 #include "game.h"
 
@@ -110,7 +113,7 @@ int setup_game(GameState* state, CmdConfig* config) {
     //used for timing stats
     QueryPerformanceFrequency(&state->clock_freq);
     init_fpstracker(&state->fps_timer, N_TRACKED_FRAMES);
-    
+
     //from cmd line
     state->window_size.x = config->window_x;
     state->window_size.y = config->window_y;
@@ -121,11 +124,6 @@ int setup_game(GameState* state, CmdConfig* config) {
     state->game_flags[FLAG_RUNNING] = true;
     state->game_flags[FLAG_PAUSED] = false;
     state->game_flags[FLAG_SHOW_STATS] = true;
-
-    //Shouldn't be needed, memory is zeroed
-    // state->game_stats[STAT_SCORE] = 0;
-    // state->game_stats[STAT_N_DRAWS] = 0;
-    // state->game_stats[STAT_N_RENDERS] = 0;
     
     //setup snake
     Snake* snake = &(state->game_snake);
@@ -133,8 +131,6 @@ int setup_game(GameState* state, CmdConfig* config) {
     int start_y = state->board_size.y/2;
     snake->move_dir = DIR_LEFT;
     snake->buffered_dir = DIR_LEFT;
-    // snake->max_length = max_nodes;
-    // snake->nodes = malloc(sizeof(Node) * max_nodes);
 
     int max_nodes = 10;
     realloc_snake_nodes(snake, max_nodes);
@@ -148,9 +144,36 @@ int setup_game(GameState* state, CmdConfig* config) {
     snake->nodes[1].position.x = start_x - 1;
     snake->nodes[1].position.y = start_y;
 
-    
-    
+    //Main Window
+    state->main_window = setup_window(
+        L"Snake Main Window", //Window name
+        L"Snake", //Window text
+        state, //Game data
+        state->window_size.x, state->window_size.y //Window x/y size
+        );
+    if (state->main_window == NULL) {
+        return 1;
+    }
+
+    //Graphics
+    GrStatus graphics_status = setup_graphics(&state->graphics_data, state->main_window);
+    if (graphics_status != GRAPHICS_OK) {
+        return 1;
+    }
+
     return 0;
+}
+
+LRESULT game_exit(GameState* state) {
+    state->game_flags[FLAG_RUNNING] = false;
+    return 0;
+}
+
+void cleanup_game(GameState* state) {
+    cleanup_graphics(&state->graphics_data);
+    DestroyWindow(state->main_window);
+    // PostQuitMessage(0); //Needed? About to exit anyway
+    free(state->game_snake.nodes);
 }
 
 //Renders game world to bitmap buffer, which will later be drawn.
@@ -250,7 +273,7 @@ GpStatus render_pause (GameState* state, HWND hwnd) {
 
 
 //Paints bitmap buffer to screen
-LRESULT PaintWindow(HWND hwnd, GameState* state) {
+LRESULT paint_window(HWND hwnd, GameState* state) {
     LARGE_INTEGER paint_start; LARGE_INTEGER paint_end;
     QueryPerformanceCounter(&paint_start);
     GpStatus gp_status;
@@ -280,7 +303,7 @@ LRESULT PaintWindow(HWND hwnd, GameState* state) {
 }
 
 
-LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
+LRESULT handle_keys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
     
     switch(wParam) { //special keys
         case KEYINPUT_ESCAPE: //exit
@@ -325,11 +348,72 @@ LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-void run_game(GameState* state, HWND hwnd) {
-    GpStatus status = render_game(state, hwnd);
-    // if (status != Ok) {
-    //     return 1;
-    // }
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    //on window creation, set game state pointer
+    if (uMsg == WM_CREATE) {
+        CREATESTRUCT* pCreate = (CREATESTRUCT*)lParam;
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)(pCreate->lpCreateParams));
+        return TRUE;
+    }
+
+    //handle window messages    
+    GameState* state = (GameState*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    switch (uMsg)
+    {
+        case WM_ERASEBKGND:
+            return TRUE;
+        case WM_DESTROY:
+            return game_exit(state);
+        case WM_PAINT:
+            return paint_window(hwnd, state);
+        case WM_KEYDOWN:
+            return handle_keys(hwnd, state, wParam, lParam);
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+HWND setup_window(const wchar_t* WindowName, const wchar_t* WindowText, void* AppData, int x_size, int y_size) {
+    HINSTANCE hInstance = GetModuleHandle(NULL);
+
+    // Register the window class.
+    WNDCLASS wc = { };
+    wc.lpfnWndProc   = WindowProc;
+    wc.hInstance     = hInstance;
+    wc.lpszClassName = WindowName;
+    RegisterClass(&wc);
+
+    // Create the window.
+    HWND hwnd = CreateWindowEx(
+        0,                              // Optional window styles.
+        WindowName,                     // Window class
+        WindowText,    // Window text
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,    // Window style
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, // dwStyle, X, Y, nWidth, nHeight
+        NULL,       // Parent window    
+        NULL,       // Menu
+        hInstance,  // Instance handle
+        AppData        // Additional application data
+        );
+
+    if (hwnd == NULL) {
+        return NULL;
+    }
+
+    SetWindowPos(
+        hwnd,          //HWND hWnd,
+        HWND_TOP,           //HWND hWndInsertAfter,
+        0, 0,         //int  X,Y,
+        x_size, y_size,            //int  cx,cy,
+        SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE         //UINT uFlags
+        );
+
+    ShowWindow(hwnd, SW_NORMAL);
+
+    return hwnd;
+}
+
+void run_game(GameState* state) {
+    GpStatus status = render_game(state, state->main_window); //initial draw
     
     MSG msg;
     while(state->game_flags[FLAG_RUNNING]) {
@@ -342,6 +426,7 @@ void run_game(GameState* state, HWND hwnd) {
         //Process message queue
         QueryPerformanceCounter(&msg_start);
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {  // Change to PeekMessage to make non-blocking
+            //Should ignore draw calls here?
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
@@ -357,13 +442,13 @@ void run_game(GameState* state, HWND hwnd) {
             //re-render
         
         QueryPerformanceCounter(&rndr_start);
-        render_game(state, hwnd);
+        render_game(state, state->main_window);
         QueryPerformanceCounter(&rndr_end);
         state->game_stats[STAT_RENDER_MS] = 1000 * (rndr_end.QuadPart - rndr_start.QuadPart) / state->clock_freq.QuadPart;
 
         //Redraw Window
-        InvalidateRgn(hwnd, NULL, FALSE);
-        UpdateWindow(hwnd);
+        InvalidateRgn(state->main_window, NULL, FALSE);
+        UpdateWindow(state->main_window);
         
         //Set timer to remaining time for vsync (Use SetTimer winapi to trigger an event?)
         Sleep(100);

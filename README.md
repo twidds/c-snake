@@ -7,6 +7,11 @@ Environment used to build (you may need to adjust for your own setup):
     MinGW - 5.0.0 (GCC 13.2.0)
     Windows SDK (includs gdi+ SDK) - 10.1.0.0
 
+Controls:
+    esc - exit game
+    s - show/hide stats
+    p - pause
+    arrow keys - control snake
 
 References:
     http://www.winprog.org/tutorial/bitmaps.html

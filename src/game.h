@@ -1,3 +1,5 @@
+//MUST INCLUDE windows.h BEFORE THIS HEADER
+
 #ifndef SNAKE_GAME_H
 #define SNAKE_GAME_H
 
@@ -61,6 +63,7 @@ typedef struct FpsTimer {
 typedef struct GameState {
     bool game_flags[FLAGS_COUNT];
     int game_stats[STAT_COUNT];
+    HWND main_window;
     FpsTimer fps_timer;
     LARGE_INTEGER clock_freq;
     int score;
@@ -75,6 +78,8 @@ typedef struct GameState {
 
 extern const char* STAT_STRINGS[STAT_COUNT];
 
+HWND setup_window(const wchar_t* WindowName, const wchar_t* WindowText, void* AppData, int x_size, int y_size);
+
 int parse_cmdline(CmdConfig* config, char** argv, int argc);
 void realloc_snake_nodes(Snake* snake, int newsize);
 void delete_fpstracker(FpsTimer* tracker);
@@ -82,10 +87,12 @@ void init_fpstracker(FpsTimer* tracker , int n_trackedframes);
 void update_fpstracker(FpsTimer* tracker, clock_t latest);
 void swap_buffers(void** bufa, void** bufb);
 int setup_game(GameState* state, CmdConfig* config);
+LRESULT game_exit(GameState* state);
+void cleanup_game(GameState* state);
 GpStatus render_game(GameState* state, HWND hwnd);
 GpStatus render_pause (GameState* state, HWND hwnd);
-LRESULT PaintWindow(HWND hwnd, GameState* state);
-LRESULT HandleKeys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam);
-void run_game(GameState* state, HWND hwnd);
+LRESULT paint_window(HWND hwnd, GameState* state);
+LRESULT handle_keys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam);
+void run_game(GameState* state);
 
 #endif /* SNAKE_GAME_H*/

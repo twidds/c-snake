@@ -26,6 +26,7 @@ typedef struct SpriteSheet {
 } SpriteSheet;
 
 typedef struct GraphicsData {
+    ULONG_PTR gdip_token;
     GpImage* render_buffer;
     GpImage* spritesheet;
     // SpriteSheet* spritesheets;
@@ -38,7 +39,13 @@ typedef enum RotateType {
     Rotate270
 } RotateType;
 
-ULONG_PTR setup_graphics(GraphicsData* graphics_data, HWND hwnd);
+typedef enum GrStatus {
+    GRAPHICS_OK,
+    GRAPHICS_FAIL,
+} GrStatus;
+
+GrStatus setup_graphics(GraphicsData* graphics_data, HWND hwnd);
+GrStatus cleanup_graphics(GraphicsData* graphics_data);
 ARGB CreateARGB(BYTE a, BYTE r, BYTE g, BYTE b);
 GpStatus DrawImageRectangle(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect);
 GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect, RotateType rtype);
