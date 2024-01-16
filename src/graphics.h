@@ -11,25 +11,24 @@ typedef struct Point2D {
 } Point2D;
 
 typedef struct Sprite {
-    char* name;
-    Point2D pixel_dimxy;
+    GpRect image_rect; //Rectangle of pixels in image for this Sprite
 } Sprite;
 
 //PlaceHolder:
 typedef struct SpriteSheet {
-    char* filepath;
-    char* name;
-    Point2D sprite_dimxy;
-    Point2D pixel_dimxy;
+    Point2D spritesheet_size; //rows/column count of sprites
+    Point2D sprite_size; //pixel x/y
     Sprite* sprites;
+    int sprite_count;
+    Point2D imagesize; //pixels
     GpImage* image;
 } SpriteSheet;
 
 typedef struct GraphicsData {
     ULONG_PTR gdip_token;
     GpImage* render_buffer;
-    GpImage* spritesheet;
-    // SpriteSheet* spritesheets;
+    // GpImage* spritesheet;
+    SpriteSheet* spritesheet;
 } GraphicsData;
 
 typedef enum RotateType {
@@ -44,15 +43,21 @@ typedef enum GrStatus {
     GRAPHICS_FAIL,
 } GrStatus;
 
+
+
 GrStatus setup_graphics(GraphicsData* graphics_data, HWND hwnd);
 GrStatus cleanup_graphics(GraphicsData* graphics_data);
 ARGB CreateARGB(BYTE a, BYTE r, BYTE g, BYTE b);
 GpStatus DrawImageRectangle(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect);
-GpStatus DrawRotatedImage(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect, RotateType rtype);
+GpStatus DrawImageRectangleRotated(GpGraphics* graphics, GpImage* image, GpRect* dst_rect, GpRect* src_rect, RotateType rtype);
 
 //PlaceHolders:
-GpStatus DrawSprite(GpGraphics* graphics, SpriteSheet* spritesheet, Point2D* sprite_xy, GpRect* dst_rect, GpRect* src_rect);
-GpStatus DrawRotatedSprite(GpGraphics* graphics, SpriteSheet* spritesheet, Point2D* sprite_xy, GpRect* dst_rect, GpRect* src_rect, RotateType rtype);
+GpStatus ImportSpriteSheet(SpriteSheet* spritesheet, const wchar_t* filepath, int n_cols, int n_rows);
+GpStatus FreeSpriteSheet(SpriteSheet* spritesheet);
+GpStatus DrawSprite_XY(GpGraphics* graphics, GpRect* dst_rect, SpriteSheet* spritesheet, Point2D sprite_xy);
+GpStatus DrawSprite_Index(GpGraphics* graphics, GpRect* dst_rect, SpriteSheet* spritesheet, int sprite_index);
+GpStatus DrawSpriteRotated_XY(GpGraphics* graphics, GpRect* dst_rect, SpriteSheet* spritesheet, Point2D sprite_xy, RotateType rtype);
+GpStatus DrawSpriteRotated_Index(GpGraphics* graphics, GpRect* dst_rect, SpriteSheet* spritesheet, int sprite_index, RotateType rtype);
 
 
 #endif /* SNAKE_GRAPHICS_H */

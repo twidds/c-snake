@@ -28,10 +28,12 @@ typedef struct Snake {
 } Snake;
 
 typedef struct CmdConfig {
-    int window_x;
-    int window_y;
-    int board_x;
-    int board_y;
+    Point2D window_size;
+    Point2D grid_size;
+    // int window_x;
+    // int window_y;
+    // int board_x;
+    // int board_y;
 } CmdConfig;
 
 typedef enum GameFlag {
@@ -69,7 +71,7 @@ typedef struct GameState {
     int score;
 
     Point2D window_size;
-    Point2D board_size;
+    Point2D grid_size;
     Snake game_snake;
     Node apple;
 

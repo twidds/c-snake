@@ -22,6 +22,32 @@
 
 #define N_TRACKED_FRAMES 10
 
+//This shouldn't be hardcoded.... but I'm lazy right now.
+//TODO:: Create some sort of metadata file packaged with spritesheet instead.
+typedef enum SnakeSpriteIndices {
+    SNAKE_SPRITE_HEAD_LR,
+    SNAKE_SPRITE_HEAD_DU,
+    SNAKE_SPRITE_BODY_LR,
+    SNAKE_SPRITE_BODY_UD,
+    SNAKE_SPRITE_BODY_LU,
+    SNAKE_SPRITE_BODY_RU,
+    SNAKE_SPRITE_BODY_RD,
+    SNAKE_SPRITE_BODY_LD,
+    SNAKE_SPRITE_TAIL_RL,
+    SNAKE_SPRITE_TAIL_DU,
+    SNAKE_SPRITE_UNUSED_10,
+    SNAKE_SPRITE_UNUSED_11,
+    SNAKE_SPRITE_CHERRY,
+    SNAKE_SPRITE_UNUSED_13,
+    SNAKE_SPRITE_UNUSED_14,
+    SNAKE_SPRITE_UNUSED_15,
+    SNAKE_SPRITE_GROUND_BROWN,
+    SNAKE_SPRITE_UNUSED_17,
+    SNAKE_SPRITE_UNUSED_18,
+    SNAKE_SPRITE_UNUSED_19,
+    SNAKE_SPRITE_COUNT
+} SnakeSpriteIndices;
+
 const char* STAT_STRINGS[STAT_COUNT] = {
     "# renders: %d", 
     "# draws: %d", 
@@ -36,16 +62,16 @@ int parse_cmdline(CmdConfig* config, char** argv, int argc) {
     //TODO:: Set window size based on command line
     //uses __argv, __argc, feels like cheating
 
-    config->window_x = WINDOW_WIDTH;
-    config->window_y = WINDOW_HEIGHT;
-    config->board_x = BOARD_WIDTH;
-    config->board_y = BOARD_HEIGHT;
+    config->window_size.x = WINDOW_WIDTH;
+    config->window_size.y = WINDOW_HEIGHT;
+    config->grid_size.x = BOARD_WIDTH;
+    config->grid_size.y = BOARD_HEIGHT;
     
-    if (config->window_x < MIN_WINDOW_WIDTH || config->window_y < MIN_WINDOW_HEIGHT) {
+    if (config->window_size.x < MIN_WINDOW_WIDTH || config->window_size.y < MIN_WINDOW_HEIGHT) {
         return 1;
     }
 
-    if (config->board_x < MIN_BOARD_WIDTH || config->board_y < MIN_BOARD_HEIGHT) {
+    if (config->grid_size.x < MIN_BOARD_WIDTH || config->grid_size.y < MIN_BOARD_HEIGHT) {
         return 2;
     }
     
@@ -115,10 +141,8 @@ int setup_game(GameState* state, CmdConfig* config) {
     init_fpstracker(&state->fps_timer, N_TRACKED_FRAMES);
 
     //from cmd line
-    state->window_size.x = config->window_x;
-    state->window_size.y = config->window_y;
-    state->board_size.x = config->board_x;
-    state->board_size.y = config->board_y;
+    state->window_size = config->window_size;
+    state->grid_size = config->grid_size;
     
     //game initial state
     state->game_flags[FLAG_RUNNING] = true;
@@ -127,8 +151,8 @@ int setup_game(GameState* state, CmdConfig* config) {
     
     //setup snake
     Snake* snake = &(state->game_snake);
-    int start_x = state->board_size.x/2;
-    int start_y = state->board_size.y/2;
+    int start_x = state->grid_size.x/2;
+    int start_y = state->grid_size.y/2;
     snake->move_dir = DIR_LEFT;
     snake->buffered_dir = DIR_LEFT;
 
@@ -196,23 +220,28 @@ GpStatus render_game(GameState* state, HWND hwnd) {
     //Draw image
     GpGraphics* graphics;
     GdipCreateFromHDC(hdc_mem, &graphics);
-    GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor);
+
+    GdipSetInterpolationMode(graphics, InterpolationModeNearestNeighbor); //NO SMOOTH MA IMAGE!
+    GdipSetPixelOffsetMode(graphics, PixelOffsetModeHalf); //NO CUT MA PIXELS IN HALF!
 
     GpSolidFill* solidfill;
     status = GdipCreateSolidFill(CreateARGB(190, 190, 190, 255), &solidfill);
     status = GdipFillRectangleI(graphics, solidfill, 0, 0, state->window_size.x, state->window_size.y);
 
-    GpRect img_rect = {};
-    GdipGetImageWidth(state->graphics_data.spritesheet, &(img_rect.Width));
-    GdipGetImageHeight(state->graphics_data.spritesheet, &(img_rect.Height));
-
     GpRect dst_rect = {};
-    dst_rect.Width = img_rect.Width * 5;
-    dst_rect.Height = img_rect.Height * 5;
+    dst_rect.X = 100;
+    dst_rect.Y = 100;
+    dst_rect.Width = 500;
+    dst_rect.Height = 500;
 
-    img_rect.X = 0;
-    img_rect.Y = 0;
-    status = DrawImageRectangle(graphics, state->graphics_data.spritesheet, &dst_rect, &img_rect);
+    // DrawSprite_Index(graphics, &dst_rect, state->graphics_data.spritesheet, SNAKE_SPRITE_HEAD_LR);
+    int index = state->game_stats[STAT_N_RENDERS] / 10;
+    index = index % SNAKE_SPRITE_COUNT;
+    DrawSprite_Index(graphics, &dst_rect, state->graphics_data.spritesheet, index);
+
+    // img_rect.X = 0;
+    // img_rect.Y = 0;
+    // status = DrawImageRectangle(graphics, state->graphics_data.spritesheet, &dst_rect, &img_rect);
 
     //draw stats
     RECT text_rect = {0, 0, state->window_size.x, state->window_size.y}; // LEFT,TOP,RIGHT,BOT
