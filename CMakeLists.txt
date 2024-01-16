@@ -16,5 +16,5 @@ project(snake)
 
 #aux_source_directory(./src SRC_LIST)
 
-add_executable(snake src/main.c)
+add_executable(snake src/main.c src/graphics.c src/game.c)
 target_link_libraries(snake gdiplus)
