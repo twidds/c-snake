@@ -1,30 +1,20 @@
-//Entry point for game.
-//Actual game logic is all inside game.c
+#include "raylib.h"
 
-#ifdef _WIN32
-    #include <windows.h>
-#endif /* _WIN32 */
-
-#include "game.h"
 
 int main(char** argv, int argc) {
-    CmdConfig config;
-    if (parse_cmdline(&config, argv, argc) != 0){
-        return 1;
-    }
+    const int screen_w = 800;
+    const int screen_h = 450;
 
-    GameState state = {};
-    if (setup_game(&state, &config) != 0) {
-        return 2;
+    InitWindow(screen_w,screen_h, "raylib basic window");
+    SetTargetFPS(60);
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawText("Made our first window",190,200,20,LIGHTGRAY);
+        EndDrawing();
     }
-    
-    run_game(&state);
-    cleanup_game(&state);
+    CloseWindow();
     return 0;
+
 }
 
-#ifdef _WIN32
-    int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
-        return main(__argv, __argc);
-    }
-#endif /* _WIN32 */
