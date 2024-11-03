@@ -74,7 +74,7 @@ GrStatus setup_graphics(GraphicsData* graphics_data, HWND hwnd) {
     }
     
     SpriteSheet* spritesheet = malloc(sizeof(SpriteSheet));
-    gp_status = ImportSpriteSheet(spritesheet, L"../assets/spritesheet.bmp", 4, 5);
+    gp_status = ImportSpriteSheet(spritesheet, L"./spritesheet.bmp", 4, 5);
     if (gp_status != Ok) {
         free(spritesheet);
         GdiplusShutdown(gdip_token);

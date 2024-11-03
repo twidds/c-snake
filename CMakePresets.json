@@ -1,0 +1,26 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 5,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "mingw-build-release",
+            "binaryDir": "${sourceDir}/build/release",
+            "generator": "MinGW Makefiles",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":"Release"
+            }
+        },
+        {
+            "name": "mingw-build-debug",
+            "binaryDir": "${sourceDir}/build/debug",
+            "generator": "MinGW Makefiles",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":"Debug"
+            }
+        }
+    ]
+}

@@ -20,11 +20,11 @@ References:
 
 
 TODO:
- * Add spritesheet support
  * Add rendering of game objects (tie sprites to world objects)
  * Add movement
  * Add collision handling
  * Add end game screen
+ * Update filepaths to be subdirs (make ..\assets only for debug)
  * Add command line parsing (allow variable x/y for grid and window)
  * Add smooth animations
 

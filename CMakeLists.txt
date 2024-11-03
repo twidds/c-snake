@@ -18,3 +18,4 @@ project(snake)
 
 add_executable(snake src/main.c src/graphics.c src/game.c)
 target_link_libraries(snake gdiplus)
+configure_file(assets/spritesheet_actual.bmp spritesheet.bmp COPYONLY)
