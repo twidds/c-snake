@@ -10,8 +10,8 @@
 
 typedef enum Direction {
     DIR_UP,
-    DIR_DOWN,
     DIR_LEFT,
+    DIR_DOWN,
     DIR_RIGHT
 } Direction;
 
@@ -20,8 +20,9 @@ typedef struct Node {
 } Node;
 
 typedef struct Snake {
-    Direction buffered_dir;
-    Direction move_dir;
+    // Direction buffered_dir;
+    // Direction move_dir;
+    Direction facing;
     Node* nodes; //points at tail
     int length;
     int max_length;

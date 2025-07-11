@@ -153,8 +153,8 @@ int setup_game(GameState* state, CmdConfig* config) {
     Snake* snake = &(state->game_snake);
     int start_x = state->grid_size.x/2;
     int start_y = state->grid_size.y/2;
-    snake->move_dir = DIR_LEFT;
-    snake->buffered_dir = DIR_LEFT;
+    // snake->move_dir = DIR_LEFT;
+    // snake->buffered_dir = DIR_LEFT;
 
     int max_nodes = 10;
     realloc_snake_nodes(snake, max_nodes);
@@ -351,28 +351,28 @@ LRESULT handle_keys(HWND hwnd, GameState* state, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     
-    switch(wParam) { //gameplay keys
-        case KEYINPUT_LEFT:
-            if (state->game_snake.move_dir != DIR_RIGHT) {
-                state->game_snake.buffered_dir = DIR_LEFT;
-            }
-            break;
-        case KEYINPUT_UP:
-            if (state->game_snake.move_dir != DIR_DOWN) {
-                state->game_snake.buffered_dir = DIR_UP;
-            }
-            break;
-        case KEYINPUT_RIGHT:
-            if (state->game_snake.move_dir != DIR_LEFT) {
-                state->game_snake.buffered_dir = DIR_RIGHT;
-            }
-            break;
-        case KEYINPUT_DOWN:
-            if (state->game_snake.move_dir != DIR_UP) {
-                state->game_snake.buffered_dir = DIR_DOWN;
-            }
-            break;
-    }
+    // switch(wParam) { //gameplay keys
+    //     case KEYINPUT_LEFT:
+    //         if (state->game_snake.move_dir != DIR_RIGHT) {
+    //             state->game_snake.buffered_dir = DIR_LEFT;
+    //         }
+    //         break;
+    //     case KEYINPUT_UP:
+    //         if (state->game_snake.move_dir != DIR_DOWN) {
+    //             state->game_snake.buffered_dir = DIR_UP;
+    //         }
+    //         break;
+    //     case KEYINPUT_RIGHT:
+    //         if (state->game_snake.move_dir != DIR_LEFT) {
+    //             state->game_snake.buffered_dir = DIR_RIGHT;
+    //         }
+    //         break;
+    //     case KEYINPUT_DOWN:
+    //         if (state->game_snake.move_dir != DIR_UP) {
+    //             state->game_snake.buffered_dir = DIR_DOWN;
+    //         }
+    //         break;
+    // }
 
     return 0;
 }
