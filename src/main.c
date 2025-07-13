@@ -10,6 +10,15 @@ typedef struct {
     int y;
 } iVec2D;
 
+
+const iVec2D SCREEN_SIZE = {800,800};
+const iVec2D GRID_SIZE = {5,5};
+const int SQUARE_PIXEL_WIDTH = 16; //must match width of sprites
+const int GAME_FPS = 60;
+const float TICK_WAIT_FRAMES = 8.0f;
+const float TICK_WAIT_TIME = TICK_WAIT_FRAMES / GAME_FPS;
+const int KEY_QUEUE_LENGTH = 2;
+
 typedef enum {
     FOOD_CHERRY,
     FOOD_SPRITE_COUNT
@@ -56,9 +65,17 @@ typedef enum {
     SPRITE_SHEET_COUNT
 } SpriteSheetIdx;
 
+typedef enum {
+    GAME_PAUSED,
+    CHERRY_ALIVE,
+    FLAGS_COUNT
+} GameFlagIdx;
+
 typedef struct GameState{
+    double tick_time; //tracks time since last tick
     Direction* dir_queue;
     Texture2D* textures;
+    bool* flags;
 } GameState;
 
 // typedef struct Node {
@@ -75,13 +92,7 @@ typedef struct Snake {
 } Snake;
 
 
-const iVec2D SCREEN_SIZE = {800,800};
-const iVec2D GRID_SIZE = {20,20};
-const int SQUARE_PIXEL_WIDTH = 16; //must match width of sprites
-const int GAME_FPS = 60;
-const float SNAKE_WAIT_FRAMES = 10.0f;
-const float SNAKE_WAIT_TIME = SNAKE_WAIT_FRAMES / GAME_FPS;
-const int KEY_QUEUE_LENGTH = 2;
+
 
 fVec2D GridToPixelCoords(int grid_x, int grid_y) {
     fVec2D coord = {grid_x * SQUARE_PIXEL_WIDTH, grid_y * SQUARE_PIXEL_WIDTH};
@@ -139,18 +150,26 @@ Direction flip_direction(Direction d) {
     }
 }
 
-//If it's valid, updates snake's facing direction and moves by one space
-void move_snake(Snake* snake, Direction* direction_queue) {
+//Returns next queued key. This modifies the queue.
+//If no keys are queued, returns DIR_NULL
+Direction get_queued_direction(Direction* queue) {
     for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {
-        if (direction_queue[i] != DIR_NULL) {
-            if (direction_queue[i] != flip_direction(snake->facing)) {
-                snake->facing = direction_queue[i];
-            }
-            direction_queue[i] = DIR_NULL;
-            break;
+        if (queue[i] != DIR_NULL) {
+            Direction key = queue[i];
+            queue[i] = DIR_NULL;
+            return key;
         }
     }
-    
+    return DIR_NULL;
+}
+
+//If it's valid, updates snake's facing direction and moves by one space
+void move_snake(Snake* snake, Direction* dir_queue) {
+    Direction dir = get_queued_direction(dir_queue);
+    if (dir != DIR_NULL && dir != flip_direction(snake->facing)) {
+        snake->facing = dir;
+    }
+
     for (int i = 0; i < snake->length - 1; i++) {
         snake->nodes[i] = snake->nodes[i+1];
     }
@@ -169,8 +188,8 @@ Snake* make_snake(iVec2D tail_coord, Direction direction, int length) {
     Snake* snake = malloc(sizeof(Snake));
     snake->facing = direction;
     snake->length = length;
-    snake->max_length = length;
-    snake->nodes = malloc(sizeof(iVec2D) * length);
+    snake->max_length = GRID_SIZE.x * GRID_SIZE.y;
+    snake->nodes = malloc(sizeof(iVec2D) * snake->max_length);
     
     for (int i = 0; i < length; i++) {
         snake->nodes[i] = tail_coord;
@@ -184,14 +203,6 @@ void destroy_snake(Snake* snake) {
     free(snake);
 }
 
-
-//Returns the direction to get from start to end assuming they are only offset by X OR Y
-//Takes grid wrapping into account
-//If coordinate is diagonal then this is undefined
-void get_coord_direction(iVec2D start, iVec2D end) {
-
-}
-
 //subtracts result of (first - second)
 iVec2D sub_iVec2D(iVec2D first, iVec2D second) {
     iVec2D result;
@@ -199,7 +210,6 @@ iVec2D sub_iVec2D(iVec2D first, iVec2D second) {
     result.y = first.y - second.y;
     return result;
 }
-
 
 Direction get_snake_node_direction(iVec2D start_node, iVec2D end_node) {
     iVec2D sub = sub_iVec2D(end_node, start_node);
@@ -243,18 +253,19 @@ bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
     for (int i = 0; i < arr_len; i++) { presence_array[i] = false; }
     
     for (int i = 0; i < snake->length; i++) {
-        int idx = snake->nodes[i].x + snake->nodes[i].y * GRID_SIZE.x;
+        int idx = snake->nodes[i].x + (snake->nodes[i].y * GRID_SIZE.x);
         presence_array[idx] = true;
     }
 
     //start with random spot and scan through array until empty place found or everything scanned.
     int choice = GetRandomValue(0, arr_len - 1);
     int count = 1;
-    while (presence_array[choice] && count > arr_len) {
+    while (presence_array[choice] && count < arr_len) {
         choice++;
         count++;
         if (choice >= arr_len) {choice = 0;}
     }
+    printf("cherry move count: %d\r\n", count);
 
     //If it's empty, populate coordinates. Otherwise return false.
     if (!presence_array[choice]) {
@@ -262,6 +273,7 @@ bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
         cherry_location->y = choice / GRID_SIZE.x;
         return true;
     }
+    printf("failed to spawn");
     return false;
 }
 
@@ -386,9 +398,20 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
 }
 
 //Grows head by one in the direction it's facing
-//TODO:: implement
-void grow_snake(Snake* snake) {
-
+//This is so close to the same as move_snake, wonder if we can merge...
+void grow_snake(Snake* snake, Direction* dir_queue) {
+    Direction dir = get_queued_direction(dir_queue);
+    if (dir != DIR_NULL && dir != flip_direction(snake->facing)) {
+        snake->facing = dir;
+    }
+    if (snake->length + 1 > snake->max_length) {
+        printf("Can't grow snake, it's too big");
+        return;
+    }
+    iVec2D head = snake->nodes[snake->length-1];
+    iVec2D new_head = get_coord_offset(head, snake->facing, 1);
+    snake->nodes[snake->length] = new_head;
+    snake->length += 1;
 }
 
 void squish_key_queue(Direction* queue){
@@ -444,55 +467,94 @@ void draw_food(iVec2D food_pos, Texture2D sprite_sheet) {
     DrawTextureRec(sprite_sheet, sprite_rect, screen_pos, WHITE);
 }
 
-int main(char** argv, int argc) {
-    //TODO:: parse cmd line to get screen w/h and vsync/framerate
+void init_state(GameState* state) {
+    state->textures = malloc(sizeof(Texture2D) * SPRITE_SHEET_COUNT);
+    state->textures[SPRITE_FOOD_IDX] = LoadTexture("assets/food_spritesheet.bmp");
+    state->textures[SPRITE_SNAKE_IDX] = LoadTexture("assets/snake_spritesheet.bmp");
+    state->textures[SPRITE_BACKGROUND_IDX] = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    state->flags = malloc(sizeof(bool) * FLAGS_COUNT);
+    state->flags[GAME_PAUSED] = false;
+    state->flags[CHERRY_ALIVE] = true;
+    state->dir_queue = malloc(sizeof(Direction) * KEY_QUEUE_LENGTH);
+    for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {state->dir_queue[i] = DIR_NULL;}
+    state->dir_queue[0] = DIR_UP;
+    state->tick_time = GetTime();
+}
 
+//Returns true if snake head is colliding with the cherry
+bool cherry_collision(Snake* snake, iVec2D cherry_pos) {
+    iVec2D head = snake->nodes[snake->length - 1];
+    if (head.x == cherry_pos.x && head.y == cherry_pos.y) {
+        return true;
+    }
+    return false;
+}
+
+//Returns true if snake head is colliding with some other body part
+bool self_collision(Snake* snake) {
+    iVec2D head = snake->nodes[snake->length - 1];
+    for (int i = 0; i < snake->length - 1; i++) {
+        iVec2D bod = snake->nodes[i];
+        if (head.x == bod.x && head.y == bod.y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void update_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
+    if (GetTime() - state->tick_time < TICK_WAIT_TIME) {
+        return;
+    }
+    state->tick_time = GetTime();
+
+    move_snake(snake, state->dir_queue);
+    if (cherry_collision(snake, *cherry_pos)) {
+        grow_snake(snake, state->dir_queue);
+        spawn_cherry(snake, cherry_pos);
+    }
+    if (self_collision(snake)) {
+        printf("hit ourselves\r\n");
+    }
+}
+
+//TODO:: parse cmd line to get screen w/h and vsync/framerate
+int main(char** argv, int argc) {
     InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
     SetTargetFPS(GAME_FPS);
     
-    //init game state. TODO:: move to separate function
     GameState state;
-    state.textures = malloc(sizeof(Texture2D) * SPRITE_SHEET_COUNT);
-    state.textures[SPRITE_FOOD_IDX] = LoadTexture("assets/food_spritesheet.bmp");
-    state.textures[SPRITE_SNAKE_IDX] = LoadTexture("assets/snake_spritesheet.bmp");
-    state.textures[SPRITE_BACKGROUND_IDX] = LoadTexture("assets/backgrounds_spritesheet.bmp");
-    state.dir_queue = malloc(sizeof(Direction) * KEY_QUEUE_LENGTH);
-    for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {state.dir_queue[i] = DIR_NULL;}
-    state.dir_queue[0] = DIR_UP;
+    init_state(&state);
+    
     Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
-    iVec2D food_pos;
+    iVec2D cherry_pos;
     iVec2D snake_start =  {2,2};
     Snake* snake = make_snake(snake_start, state.dir_queue[0], 8);
-    spawn_cherry(snake, &food_pos);
+    spawn_cherry(snake, &cherry_pos);
 
     //camera setup
     Camera2D camera = {0};
     camera.zoom = (float)SCREEN_SIZE.x / (GRID_SIZE.x * SQUARE_PIXEL_WIDTH) ; //base on screen width only right now.
 
-    double time = GetTime();
     while (!WindowShouldClose()) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
         BeginMode2D(camera);
-        handle_input(&state);
         
-        //Draw background
-        //TODO::draw background once to a texture and use that for rest of game
-        for (int x = 0; x < GRID_SIZE.x; x++) {
+        handle_input(&state);
+        update_game(&state, snake, &cherry_pos);
+
+
+        //Draw stuff
+        for (int x = 0; x < GRID_SIZE.x; x++) { //Background
             for (int y = 0; y < GRID_SIZE.y; y++) {
                 Vector2 pos = {x * SQUARE_PIXEL_WIDTH, y * SQUARE_PIXEL_WIDTH};
                 DrawTextureRec(state.textures[SPRITE_BACKGROUND_IDX], background_rect, pos, WHITE);
             }
         }
-        
-        draw_food(food_pos, state.textures[SPRITE_FOOD_IDX]);
+        draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
         draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
-        
-        if (GetTime() - time  > SNAKE_WAIT_TIME) {
-            move_snake(snake, state.dir_queue);
-            time = GetTime();
-        }
-        
+
         EndDrawing();
     }
     CloseWindow();
