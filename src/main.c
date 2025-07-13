@@ -232,6 +232,39 @@ Rectangle screen_to_dest(fVec2D screen_position, Rectangle texture_rectangle) {
     return dest;
 }
 
+//Pick random unoccupied location to spawn the cherry.
+//If there's an empty spot, cherry_location is populated and function returns true
+//If there are no empty locations, returns false
+bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
+    //Set up bool array with snake locations true, all else false
+    const int arr_len = GRID_SIZE.x * GRID_SIZE.y;
+    static bool* presence_array = NULL;
+    if (!presence_array) {presence_array = malloc(sizeof(bool) * arr_len);}
+    for (int i = 0; i < arr_len; i++) { presence_array[i] = false; }
+    
+    for (int i = 0; i < snake->length; i++) {
+        int idx = snake->nodes[i].x + snake->nodes[i].y * GRID_SIZE.x;
+        presence_array[idx] = true;
+    }
+
+    //start with random spot and scan through array until empty place found or everything scanned.
+    int choice = GetRandomValue(0, arr_len - 1);
+    int count = 1;
+    while (presence_array[choice] && count > arr_len) {
+        choice++;
+        count++;
+        if (choice >= arr_len) {choice = 0;}
+    }
+
+    //If it's empty, populate coordinates. Otherwise return false.
+    if (!presence_array[choice]) {
+        cherry_location->x = choice % GRID_SIZE.x;
+        cherry_location->y = choice / GRID_SIZE.x;
+        return true;
+    }
+    return false;
+}
+
 //Draws the snake to the screen
 //TODO:: put drawing logic for head/tail in loop as well?
 void draw_snake(Snake* snake, Texture2D sprite_sheet) {
@@ -416,7 +449,7 @@ int main(char** argv, int argc) {
 
     InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
     SetTargetFPS(GAME_FPS);
-
+    
     //init game state. TODO:: move to separate function
     GameState state;
     state.textures = malloc(sizeof(Texture2D) * SPRITE_SHEET_COUNT);
@@ -427,9 +460,10 @@ int main(char** argv, int argc) {
     for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {state.dir_queue[i] = DIR_NULL;}
     state.dir_queue[0] = DIR_UP;
     Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
-    iVec2D food_pos = {4,2};
+    iVec2D food_pos;
     iVec2D snake_start =  {2,2};
     Snake* snake = make_snake(snake_start, state.dir_queue[0], 8);
+    spawn_cherry(snake, &food_pos);
 
     //camera setup
     Camera2D camera = {0};
