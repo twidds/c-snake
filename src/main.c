@@ -12,10 +12,10 @@ typedef struct {
 
 
 const iVec2D SCREEN_SIZE = {800,800};
-const iVec2D GRID_SIZE = {20,20};
+const iVec2D GRID_SIZE = {3,3};
 const int SQUARE_PIXEL_WIDTH = 16; //must match width of sprites
 const int GAME_FPS = 60;
-const float MIN_TICK_WAIT_FRAMES = 2.0f;
+const float MIN_TICK_WAIT_FRAMES = 0.0f;
 const float MAX_TICK_WAIT_FRAMES = 60.0f;
 const int KEY_QUEUE_LENGTH = 2;
 
@@ -44,12 +44,6 @@ typedef enum  {
     SNAKE_SPRITE_COUNT
 } SnakeSpriteIdx;
 
-// typedef struct {
-//     Texture2D sprite_sheet;
-//     Rectangle sprite_rect;
-//     Vector2 screen_position;
-// } SpriteDrawData;
-
 typedef enum Direction {
     DIR_NULL,
     DIR_UP,
@@ -68,28 +62,30 @@ typedef enum {
 typedef enum {
     FLAG_GAME_PAUSED,
     FLAG_INVINCIBLE,
+    FLAG_GAMEOVER,
     FLAG_GAMEWIN,
-    FLAG_GAMELOSS,
     FLAG_ATECHERRY,
     FLAG_SHOWDEBUG,
     FLAGS_COUNT
 } GameFlagIdx;
 
+typedef struct DirectionQueue{
+    Direction* buf;
+    int length;
+    int max_length;
+} DirectionQueue;
+
 typedef struct GameState{
     double tick_frames;
     double tick_time; //tracks time since last tick
-    Direction* dir_queue;
+    DirectionQueue dir_queue;
     Texture2D* textures;
     bool* flags;
 } GameState;
 
-// typedef struct Node {
-//     Point2D position;
-// } Node;
+
 
 typedef struct Snake {
-    // Direction buffered_dir;
-    // Direction move_dir;
     Direction facing;
     iVec2D* nodes; //points at tail
     int length;
@@ -97,15 +93,52 @@ typedef struct Snake {
 } Snake;
 
 
+void init_dirqueue(DirectionQueue* queue, int maxlength) {
+    queue->length = 0;
+    queue->max_length = maxlength;
+    queue->buf = malloc(sizeof(Direction) * maxlength);
+}
 
+void pushb_dirqueue(DirectionQueue* queue, Direction dir) {
+    if (queue->length < queue->max_length) {
+        queue->buf[queue->length] = dir;
+        queue->length += 1;
+    } else {
+        for (int i = 0; i < queue->length - 1; i++) {
+            queue->buf[i] = queue->buf[i+1];
+        }
+        queue->buf[queue->length -1] = dir;
+    }
+}
+
+Direction popf_dirqueue(DirectionQueue* queue) {
+    if (queue->length > 0) {
+        Direction dir = queue->buf[0];
+        for (int i = 0; i < queue->length - 1; i++) {
+            queue->buf[i] = queue->buf[i+1];
+        }
+        queue->length -= 1;
+        return dir;
+    }
+    return DIR_NULL;
+}
+
+Direction peekf_dirqueue(DirectionQueue* queue) {
+    if (queue->length > 0) {
+        return queue->buf[0];
+    }
+    return DIR_NULL;
+}
 
 fVec2D GridToPixelCoords(int grid_x, int grid_y) {
     fVec2D coord = {grid_x * SQUARE_PIXEL_WIDTH, grid_y * SQUARE_PIXEL_WIDTH};
     return coord;
 }
 
-Rectangle GetSpriteRect(int sprite_index, int sprite_width) {
+Rectangle GetSpriteRect(int sprite_index, int sprite_width, bool flip_x, bool flip_y) {
     Rectangle rect = {sprite_width*sprite_index, 0, sprite_width, sprite_width};
+    rect.width = flip_x ? -1 * rect.width : rect.width;
+    rect.height = flip_y ? -1 * rect.height : rect.height;
     return rect;
 }
 
@@ -169,10 +202,9 @@ Direction get_queued_direction(Direction* queue) {
 }
 
 //If it's valid, updates snake's facing direction and moves by one space
-void move_snake(Snake* snake, Direction* dir_queue) {
-    Direction dir = get_queued_direction(dir_queue);
-    if (dir != DIR_NULL && dir != flip_direction(snake->facing)) {
-        snake->facing = dir;
+void move_snake(Snake* snake, Direction queued_dir) {
+    if (queued_dir != DIR_NULL && queued_dir != flip_direction(snake->facing)) {
+        snake->facing = queued_dir;
     }
 
     for (int i = 0; i < snake->length - 1; i++) {
@@ -287,10 +319,12 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
     fVec2D screen_pos;
     fVec2D origin = {(float)SQUARE_PIXEL_WIDTH/2, (float)SQUARE_PIXEL_WIDTH/2};
     // Vector2 origin = {0.0f, 0.0f};
-    float rotation;
+    float rotation = 0.0f;
+    bool flip_x = false;
+    bool flip_y = false;
     SnakeSpriteIdx sprite_index;
     Rectangle sprite_rect;
-    Rectangle destination;
+    Rectangle dest_rect;
     
     //Draw tail
     iVec2D tail = snake->nodes[0];
@@ -300,54 +334,56 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
     switch (direction) {
         case DIR_UP:
             sprite_index = SNAKE_TAIL_V;
-            rotation = 0.0f;
             break;
         case DIR_RIGHT:
             sprite_index = SNAKE_TAIL_H;
-            rotation = 180.0f;
+            flip_x = true;
             break;
         case DIR_DOWN:
             sprite_index = SNAKE_TAIL_V;
-            rotation = 180.0f;
+            flip_y = true;
             break;
         case DIR_LEFT:
             sprite_index = SNAKE_TAIL_H;
-            rotation = 0.0f;
             break;
     }
-    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH);
+    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH, flip_x, flip_y);
     // DrawTextureRec(sprite_sheet, sprite_rect, screen_pos, WHITE);
-    DrawTexturePro(sprite_sheet, sprite_rect, screen_to_dest(screen_pos, sprite_rect), origin, rotation, WHITE);
+    dest_rect = screen_to_dest(screen_pos, sprite_rect);
+    DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
 
     //Draw head
     iVec2D head = snake->nodes[snake->length - 1];
     iVec2D prev = snake->nodes[snake->length - 2];
     direction = get_snake_node_direction(prev, head);
     screen_pos = GridToPixelCoords(head.x, head.y);
+    flip_x = false;
+    flip_y = false;
     switch (direction) {
         case DIR_UP:
             sprite_index = SNAKE_HEAD_V;
-            rotation = 0.0f;
+            // rotation = 0.0f;
             break;
         case DIR_RIGHT:
             sprite_index = SNAKE_HEAD_H;
-            rotation = 0.0f;
             break;
         case DIR_DOWN:
             sprite_index = SNAKE_HEAD_V;
-            rotation = 180.0f;
+            flip_y = true;
             break;
         case DIR_LEFT:
             sprite_index = SNAKE_HEAD_H;
-            rotation = 180.0f;
+            flip_x = true;
             break;
     }
-    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH);
-    DrawTexturePro(sprite_sheet, sprite_rect, screen_to_dest(screen_pos, sprite_rect), origin, rotation, WHITE);
+    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH, flip_x, flip_y);
+    dest_rect = screen_to_dest(screen_pos, sprite_rect);
+    DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
 
 
     //Draw body
-    rotation = 0.0f;
+    flip_x = false;
+    flip_y = false;
     for (int i = 1; i < snake->length - 1; i++) {
         iVec2D part = snake->nodes[i];
         prev = snake->nodes[i-1];
@@ -393,19 +429,18 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
                 sprite_index = SNAKE_BODY_R_D;
                 break;
         }
-        
-        sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH);
-        DrawTexturePro(sprite_sheet, sprite_rect, screen_to_dest(screen_pos, sprite_rect), origin, rotation, WHITE);
+        sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH, flip_x, flip_y);
+        dest_rect = screen_to_dest(screen_pos, sprite_rect);
+        DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
     }
 
 }
 
 //Grows head by one in the direction it's facing
 //This is so close to the same as move_snake, wonder if we can merge...
-void grow_snake(Snake* snake, Direction* dir_queue) {
-    Direction dir = get_queued_direction(dir_queue);
-    if (dir != DIR_NULL && dir != flip_direction(snake->facing)) {
-        snake->facing = dir;
+void grow_snake(Snake* snake, Direction queued_dir) {
+    if (queued_dir != DIR_NULL && queued_dir != flip_direction(snake->facing)) {
+        snake->facing = queued_dir;
     }
     if (snake->length + 1 > snake->max_length) {
         printf("Can't grow snake, it's too big");
@@ -417,46 +452,28 @@ void grow_snake(Snake* snake, Direction* dir_queue) {
     snake->length += 1;
 }
 
-void squish_key_queue(Direction* queue){
-    //Set s to first NULL in queue
-    Direction *s = queue;
-    Direction *e = queue + KEY_QUEUE_LENGTH;
-    while (s < e && *s != DIR_NULL) {s++;}
-    
-    //Swap non-null values into s until no more found
-    Direction *c = s + 1;
-    while (c < e) {
-        if (*c != DIR_NULL) {
-            *s = *c;
-            *c = DIR_NULL;
-            s++;
-        }
-        c++; //ha
-    }
-}
-
 void handle_input(GameState* state) {
     //Compactify queue
-    squish_key_queue(state->dir_queue);
-    Direction *d = state->dir_queue;
-    Direction *e = state->dir_queue + KEY_QUEUE_LENGTH;
-    while (d < e && *d != DIR_NULL) {d++;}
-
     KeyboardKey key;
     while (key = GetKeyPressed()) {
-        if (d == e) {continue;}
         switch(key) {
+            case KEY_SPACE:
+                if (state->flags[FLAG_GAMEWIN])
+                break;
             case KEY_RIGHT:
-                *d = DIR_RIGHT;
+                pushb_dirqueue(&(state->dir_queue), DIR_RIGHT);
                 break;
             case KEY_LEFT:
-                *d = DIR_LEFT;
+                pushb_dirqueue(&(state->dir_queue), DIR_LEFT);
                 break;
             case KEY_UP:
-                *d = DIR_UP;
+                pushb_dirqueue(&(state->dir_queue), DIR_UP);
                 break;
             case KEY_DOWN:
-                *d = DIR_DOWN;
+                pushb_dirqueue(&(state->dir_queue), DIR_DOWN);
+                break;
+            case KEY_P:
+                state->flags[FLAG_GAME_PAUSED] = !state->flags[FLAG_GAME_PAUSED];
                 break;
             case KEY_S:
                 state->flags[FLAG_SHOWDEBUG] = !state->flags[FLAG_SHOWDEBUG];
@@ -465,26 +482,25 @@ void handle_input(GameState* state) {
                 state->flags[FLAG_INVINCIBLE] = !state->flags[FLAG_INVINCIBLE];
                 break;
             case KEY_LEFT_BRACKET:
-                state->tick_frames += 2.0f;
+                state->tick_frames += 4.0f;
                 if (state->tick_frames > MAX_TICK_WAIT_FRAMES) {
                     state->tick_frames = MAX_TICK_WAIT_FRAMES;
                 }
                 break;
             case KEY_RIGHT_BRACKET:
-                state->tick_frames -= 2.0f;
+                state->tick_frames -= 4.0f;
                 if (state->tick_frames < MIN_TICK_WAIT_FRAMES) {
                     state->tick_frames = MIN_TICK_WAIT_FRAMES;
                 }
                 break;
         }
-        d++;
     }
 }
 
 
 void draw_food(iVec2D food_pos, Texture2D sprite_sheet) {
     fVec2D screen_pos = GridToPixelCoords(food_pos.x, food_pos.y);
-    Rectangle sprite_rect = GetSpriteRect(FOOD_CHERRY, SQUARE_PIXEL_WIDTH);
+    Rectangle sprite_rect = GetSpriteRect(FOOD_CHERRY, SQUARE_PIXEL_WIDTH, false, false);
     DrawTextureRec(sprite_sheet, sprite_rect, screen_pos, WHITE);
 }
 
@@ -499,9 +515,8 @@ void init_state(GameState* state) {
         state->flags[i] = false;
     }
 
-    state->dir_queue = malloc(sizeof(Direction) * KEY_QUEUE_LENGTH);
-    for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {state->dir_queue[i] = DIR_NULL;}
-    state->dir_queue[0] = DIR_UP;
+    init_dirqueue(&(state->dir_queue), KEY_QUEUE_LENGTH);
+    pushb_dirqueue(&(state->dir_queue), DIR_UP);
     state->tick_frames = 8.0f;
     state->tick_time = GetTime();
 }
@@ -528,29 +543,34 @@ bool self_collision(Snake* snake) {
 }
 
 void update_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
+    if (state->flags[FLAG_GAME_PAUSED]) {
+        return;
+    }
     if (GetTime() - state->tick_time < state->tick_frames/GAME_FPS) {
         return;
     }
     state->tick_time = GetTime();
 
     if (state->flags[FLAG_ATECHERRY]) {
-        grow_snake(snake, state->dir_queue);
+        grow_snake(snake, popf_dirqueue(&(state->dir_queue)));
         state->flags[FLAG_ATECHERRY] = false;
     } else {
-        move_snake(snake, state->dir_queue);
+        move_snake(snake, popf_dirqueue(&(state->dir_queue)));
     }
 
     if (cherry_collision(snake, *cherry_pos)) {
         state->flags[FLAG_ATECHERRY] = true;
         bool spawned = spawn_cherry(snake, cherry_pos);
         if (!spawned) { //no spots for cherry to spawn, we win!
+            state->flags[FLAG_GAMEOVER] = true;
             state->flags[FLAG_GAMEWIN] = true;
         }
     }
     if (self_collision(snake)) {
         printf("hit ourselves\r\n");
         if (!state->flags[FLAG_INVINCIBLE]) {
-            state->flags[FLAG_GAMELOSS] = true;
+            state->flags[FLAG_GAMEOVER] = true;
+            state->flags[FLAG_GAMEWIN] = false;
         }
     }
 }
@@ -570,6 +590,17 @@ void draw_debugtext(GameState* state, Snake* snake, iVec2D cherry_pos) {
     DrawText(stat_text, 10, 10, 8, RED);
 }
 
+void draw_background(Texture2D sprite_sheet, BackgroundSpriteIdx background) {
+
+    Rectangle background_rect = GetSpriteRect(background, SQUARE_PIXEL_WIDTH, false, false);
+    for (int x = 0; x < GRID_SIZE.x; x++) { //Background
+        for (int y = 0; y < GRID_SIZE.y; y++) {
+            Vector2 pos = {x * SQUARE_PIXEL_WIDTH, y * SQUARE_PIXEL_WIDTH};
+            DrawTextureRec(sprite_sheet, background_rect, pos, WHITE);
+        }
+    }
+}
+
 //TODO:: parse cmd line to get screen w/h and vsync/framerate
 int main(char** argv, int argc) {
     InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
@@ -578,10 +609,10 @@ int main(char** argv, int argc) {
     GameState state;
     init_state(&state);
     
-    Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
+    // Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
     iVec2D cherry_pos;
     iVec2D snake_start =  {2,2};
-    Snake* snake = make_snake(snake_start, state.dir_queue[0], 2);
+    Snake* snake = make_snake(snake_start, peekf_dirqueue(&state.dir_queue), 2);
     spawn_cherry(snake, &cherry_pos);
 
     //camera setup
@@ -598,12 +629,7 @@ int main(char** argv, int argc) {
 
 
         //Draw stuff
-        for (int x = 0; x < GRID_SIZE.x; x++) { //Background
-            for (int y = 0; y < GRID_SIZE.y; y++) {
-                Vector2 pos = {x * SQUARE_PIXEL_WIDTH, y * SQUARE_PIXEL_WIDTH};
-                DrawTextureRec(state.textures[SPRITE_BACKGROUND_IDX], background_rect, pos, WHITE);
-            }
-        }
+        draw_background(state.textures[SPRITE_BACKGROUND_IDX], BACKGROUND_DIRT);
         draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
         draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
 
