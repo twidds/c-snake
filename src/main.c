@@ -12,11 +12,11 @@ typedef struct {
 
 
 const iVec2D SCREEN_SIZE = {800,800};
-const iVec2D GRID_SIZE = {5,5};
+const iVec2D GRID_SIZE = {20,20};
 const int SQUARE_PIXEL_WIDTH = 16; //must match width of sprites
 const int GAME_FPS = 60;
-const float TICK_WAIT_FRAMES = 8.0f;
-const float TICK_WAIT_TIME = TICK_WAIT_FRAMES / GAME_FPS;
+const float MIN_TICK_WAIT_FRAMES = 2.0f;
+const float MAX_TICK_WAIT_FRAMES = 60.0f;
 const int KEY_QUEUE_LENGTH = 2;
 
 typedef enum {
@@ -66,12 +66,17 @@ typedef enum {
 } SpriteSheetIdx;
 
 typedef enum {
-    GAME_PAUSED,
-    CHERRY_ALIVE,
+    FLAG_GAME_PAUSED,
+    FLAG_INVINCIBLE,
+    FLAG_GAMEWIN,
+    FLAG_GAMELOSS,
+    FLAG_ATECHERRY,
+    FLAG_SHOWDEBUG,
     FLAGS_COUNT
 } GameFlagIdx;
 
 typedef struct GameState{
+    double tick_frames;
     double tick_time; //tracks time since last tick
     Direction* dir_queue;
     Texture2D* textures;
@@ -265,7 +270,6 @@ bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
         count++;
         if (choice >= arr_len) {choice = 0;}
     }
-    printf("cherry move count: %d\r\n", count);
 
     //If it's empty, populate coordinates. Otherwise return false.
     if (!presence_array[choice]) {
@@ -273,7 +277,6 @@ bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
         cherry_location->y = choice / GRID_SIZE.x;
         return true;
     }
-    printf("failed to spawn");
     return false;
 }
 
@@ -455,6 +458,24 @@ void handle_input(GameState* state) {
             case KEY_DOWN:
                 *d = DIR_DOWN;
                 break;
+            case KEY_S:
+                state->flags[FLAG_SHOWDEBUG] = !state->flags[FLAG_SHOWDEBUG];
+                break;
+            case KEY_I:
+                state->flags[FLAG_INVINCIBLE] = !state->flags[FLAG_INVINCIBLE];
+                break;
+            case KEY_LEFT_BRACKET:
+                state->tick_frames += 2.0f;
+                if (state->tick_frames > MAX_TICK_WAIT_FRAMES) {
+                    state->tick_frames = MAX_TICK_WAIT_FRAMES;
+                }
+                break;
+            case KEY_RIGHT_BRACKET:
+                state->tick_frames -= 2.0f;
+                if (state->tick_frames < MIN_TICK_WAIT_FRAMES) {
+                    state->tick_frames = MIN_TICK_WAIT_FRAMES;
+                }
+                break;
         }
         d++;
     }
@@ -472,12 +493,16 @@ void init_state(GameState* state) {
     state->textures[SPRITE_FOOD_IDX] = LoadTexture("assets/food_spritesheet.bmp");
     state->textures[SPRITE_SNAKE_IDX] = LoadTexture("assets/snake_spritesheet.bmp");
     state->textures[SPRITE_BACKGROUND_IDX] = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    
     state->flags = malloc(sizeof(bool) * FLAGS_COUNT);
-    state->flags[GAME_PAUSED] = false;
-    state->flags[CHERRY_ALIVE] = true;
+    for (int i = 0; i < FLAGS_COUNT; i++) {
+        state->flags[i] = false;
+    }
+
     state->dir_queue = malloc(sizeof(Direction) * KEY_QUEUE_LENGTH);
     for (int i = 0; i < KEY_QUEUE_LENGTH; i++) {state->dir_queue[i] = DIR_NULL;}
     state->dir_queue[0] = DIR_UP;
+    state->tick_frames = 8.0f;
     state->tick_time = GetTime();
 }
 
@@ -503,19 +528,46 @@ bool self_collision(Snake* snake) {
 }
 
 void update_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
-    if (GetTime() - state->tick_time < TICK_WAIT_TIME) {
+    if (GetTime() - state->tick_time < state->tick_frames/GAME_FPS) {
         return;
     }
     state->tick_time = GetTime();
 
-    move_snake(snake, state->dir_queue);
-    if (cherry_collision(snake, *cherry_pos)) {
+    if (state->flags[FLAG_ATECHERRY]) {
         grow_snake(snake, state->dir_queue);
-        spawn_cherry(snake, cherry_pos);
+        state->flags[FLAG_ATECHERRY] = false;
+    } else {
+        move_snake(snake, state->dir_queue);
+    }
+
+    if (cherry_collision(snake, *cherry_pos)) {
+        state->flags[FLAG_ATECHERRY] = true;
+        bool spawned = spawn_cherry(snake, cherry_pos);
+        if (!spawned) { //no spots for cherry to spawn, we win!
+            state->flags[FLAG_GAMEWIN] = true;
+        }
     }
     if (self_collision(snake)) {
         printf("hit ourselves\r\n");
+        if (!state->flags[FLAG_INVINCIBLE]) {
+            state->flags[FLAG_GAMELOSS] = true;
+        }
     }
+}
+
+void draw_debugtext(GameState* state, Snake* snake, iVec2D cherry_pos) {
+    int max_length = 100;
+    char stat_text[max_length];
+    snprintf(stat_text, max_length - 1, 
+        "snake_length: %d\n"
+        "cherry_pos: %d,%d\n"
+        "flag_invincible:%d\n"
+        "tick_frames:%f",
+        snake->length,
+        cherry_pos.x, cherry_pos.y,
+        state->flags[FLAG_INVINCIBLE],
+        state->tick_frames);
+    DrawText(stat_text, 10, 10, 8, RED);
 }
 
 //TODO:: parse cmd line to get screen w/h and vsync/framerate
@@ -529,7 +581,7 @@ int main(char** argv, int argc) {
     Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
     iVec2D cherry_pos;
     iVec2D snake_start =  {2,2};
-    Snake* snake = make_snake(snake_start, state.dir_queue[0], 8);
+    Snake* snake = make_snake(snake_start, state.dir_queue[0], 2);
     spawn_cherry(snake, &cherry_pos);
 
     //camera setup
@@ -554,6 +606,10 @@ int main(char** argv, int argc) {
         }
         draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
         draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
+
+        if (state.flags[FLAG_SHOWDEBUG]) {
+            draw_debugtext(&state, snake, cherry_pos);
+        }
 
         EndDrawing();
     }
