@@ -1,5 +1,5 @@
 #include "raylib.h"
-#include <stdio.h> //printf
+#include <stdio.h> //snprintf
 #include <stdlib.h> //malloc
 #include <math.h> //fabsf, abs
 
@@ -12,7 +12,7 @@ typedef struct {
 
 
 const iVec2D SCREEN_SIZE = {800,800};
-const iVec2D GRID_SIZE = {3,3};
+const iVec2D GRID_SIZE = {10,10};
 const int SQUARE_PIXEL_WIDTH = 16; //must match width of sprites
 const int GAME_FPS = 60;
 const float MIN_TICK_WAIT_FRAMES = 0.0f;
@@ -65,6 +65,8 @@ typedef enum {
     FLAG_GAMEOVER,
     FLAG_GAMEWIN,
     FLAG_ATECHERRY,
+    FLAG_BACKGROUNDCHANGE,
+    FLAG_GAMERESET,
     FLAG_SHOWDEBUG,
     FLAGS_COUNT
 } GameFlagIdx;
@@ -80,6 +82,7 @@ typedef struct GameState{
     double tick_time; //tracks time since last tick
     DirectionQueue dir_queue;
     Texture2D* textures;
+    BackgroundSpriteIdx background;
     bool* flags;
 } GameState;
 
@@ -215,29 +218,27 @@ void move_snake(Snake* snake, Direction queued_dir) {
     *head = new_head;
 }
 
-//Makes a straight snake, with tail at the specified coordinate and facing the direction indicated
-//Length less than 2 is not valid and will return null
-Snake* make_snake(iVec2D tail_coord, Direction direction, int length) {
-    if (length < 2) {
-        return NULL;
-    }
-
-    Snake* snake = malloc(sizeof(Snake));
+//Updates snake to be a straight line in direction provided starting at tail coordinate.
+void set_snake(Snake* snake, iVec2D tail_coord, Direction direction, int length) {
     snake->facing = direction;
     snake->length = length;
-    snake->max_length = GRID_SIZE.x * GRID_SIZE.y;
-    snake->nodes = malloc(sizeof(iVec2D) * snake->max_length);
     
+
     for (int i = 0; i < length; i++) {
         snake->nodes[i] = tail_coord;
         tail_coord = get_coord_offset(tail_coord, direction, 1);
     }
-    return snake;
 }
 
+//Allocates snake body
+void init_snake(Snake* snake) {
+    snake->max_length = GRID_SIZE.x * GRID_SIZE.y;
+    snake->nodes = malloc(sizeof(iVec2D) * snake->max_length);
+}
+
+//Frees snake body
 void destroy_snake(Snake* snake) {
     free(snake->nodes);
-    free(snake);
 }
 
 //subtracts result of (first - second)
@@ -314,7 +315,7 @@ bool spawn_cherry(Snake* snake, iVec2D* cherry_location) {
 
 //Draws the snake to the screen
 //TODO:: put drawing logic for head/tail in loop as well?
-void draw_snake(Snake* snake, Texture2D sprite_sheet) {
+void draw_snake(Snake snake, Texture2D sprite_sheet) {
     Direction direction;
     fVec2D screen_pos;
     fVec2D origin = {(float)SQUARE_PIXEL_WIDTH/2, (float)SQUARE_PIXEL_WIDTH/2};
@@ -327,8 +328,9 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
     Rectangle dest_rect;
     
     //Draw tail
-    iVec2D tail = snake->nodes[0];
-    iVec2D next = snake->nodes[1];
+    iVec2D tail = snake.nodes[0];
+    iVec2D next = snake.nodes[1];
+    iVec2D prev = {0};
     direction = get_snake_node_direction(tail, next);
     screen_pos = GridToPixelCoords(tail.x, tail.y);
     switch (direction) {
@@ -352,42 +354,13 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
     dest_rect = screen_to_dest(screen_pos, sprite_rect);
     DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
 
-    //Draw head
-    iVec2D head = snake->nodes[snake->length - 1];
-    iVec2D prev = snake->nodes[snake->length - 2];
-    direction = get_snake_node_direction(prev, head);
-    screen_pos = GridToPixelCoords(head.x, head.y);
-    flip_x = false;
-    flip_y = false;
-    switch (direction) {
-        case DIR_UP:
-            sprite_index = SNAKE_HEAD_V;
-            // rotation = 0.0f;
-            break;
-        case DIR_RIGHT:
-            sprite_index = SNAKE_HEAD_H;
-            break;
-        case DIR_DOWN:
-            sprite_index = SNAKE_HEAD_V;
-            flip_y = true;
-            break;
-        case DIR_LEFT:
-            sprite_index = SNAKE_HEAD_H;
-            flip_x = true;
-            break;
-    }
-    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH, flip_x, flip_y);
-    dest_rect = screen_to_dest(screen_pos, sprite_rect);
-    DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
-
-
     //Draw body
     flip_x = false;
     flip_y = false;
-    for (int i = 1; i < snake->length - 1; i++) {
-        iVec2D part = snake->nodes[i];
-        prev = snake->nodes[i-1];
-        next = snake->nodes[i+1];
+    for (int i = 1; i < snake.length - 1; i++) {
+        iVec2D part = snake.nodes[i];
+        prev = snake.nodes[i-1];
+        next = snake.nodes[i+1];
         Direction prev_dir = get_snake_node_direction(prev, part);
         Direction next_dir = get_snake_node_direction(part, next);
         screen_pos = GridToPixelCoords(part.x, part.y);
@@ -433,7 +406,34 @@ void draw_snake(Snake* snake, Texture2D sprite_sheet) {
         dest_rect = screen_to_dest(screen_pos, sprite_rect);
         DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
     }
-
+    
+    //Draw head
+    iVec2D head = snake.nodes[snake.length - 1];
+    prev = snake.nodes[snake.length - 2];
+    direction = get_snake_node_direction(prev, head);
+    screen_pos = GridToPixelCoords(head.x, head.y);
+    flip_x = false;
+    flip_y = false;
+    switch (direction) {
+        case DIR_UP:
+            sprite_index = SNAKE_HEAD_V;
+            // rotation = 0.0f;
+            break;
+        case DIR_RIGHT:
+            sprite_index = SNAKE_HEAD_H;
+            break;
+        case DIR_DOWN:
+            sprite_index = SNAKE_HEAD_V;
+            flip_y = true;
+            break;
+        case DIR_LEFT:
+            sprite_index = SNAKE_HEAD_H;
+            flip_x = true;
+            break;
+    }
+    sprite_rect = GetSpriteRect(sprite_index, SQUARE_PIXEL_WIDTH, flip_x, flip_y);
+    dest_rect = screen_to_dest(screen_pos, sprite_rect);
+    DrawTexturePro(sprite_sheet, sprite_rect, dest_rect, origin, rotation, WHITE);
 }
 
 //Grows head by one in the direction it's facing
@@ -443,7 +443,6 @@ void grow_snake(Snake* snake, Direction queued_dir) {
         snake->facing = queued_dir;
     }
     if (snake->length + 1 > snake->max_length) {
-        printf("Can't grow snake, it's too big");
         return;
     }
     iVec2D head = snake->nodes[snake->length-1];
@@ -458,7 +457,9 @@ void handle_input(GameState* state) {
     while (key = GetKeyPressed()) {
         switch(key) {
             case KEY_SPACE:
-                if (state->flags[FLAG_GAMEWIN])
+                if (state->flags[FLAG_GAMEOVER]) {
+                    state->flags[FLAG_GAMERESET] = true;
+                }
                 break;
             case KEY_RIGHT:
                 pushb_dirqueue(&(state->dir_queue), DIR_RIGHT);
@@ -509,16 +510,24 @@ void init_state(GameState* state) {
     state->textures[SPRITE_FOOD_IDX] = LoadTexture("assets/food_spritesheet.bmp");
     state->textures[SPRITE_SNAKE_IDX] = LoadTexture("assets/snake_spritesheet.bmp");
     state->textures[SPRITE_BACKGROUND_IDX] = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    // state->background = BACKGROUND_DIRT;
     
     state->flags = malloc(sizeof(bool) * FLAGS_COUNT);
+    init_dirqueue(&(state->dir_queue), KEY_QUEUE_LENGTH);
+
+}
+
+void setup_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
     for (int i = 0; i < FLAGS_COUNT; i++) {
         state->flags[i] = false;
     }
-
-    init_dirqueue(&(state->dir_queue), KEY_QUEUE_LENGTH);
-    pushb_dirqueue(&(state->dir_queue), DIR_UP);
+    state->flags[FLAG_BACKGROUNDCHANGE] = true;
+    state->background = BACKGROUND_DIRT;
     state->tick_frames = 8.0f;
     state->tick_time = GetTime();
+    while (popf_dirqueue(&state->dir_queue)) {}
+    set_snake(snake, (iVec2D){1,1}, DIR_DOWN, 2);
+    spawn_cherry(snake, cherry_pos);
 }
 
 //Returns true if snake head is colliding with the cherry
@@ -542,8 +551,13 @@ bool self_collision(Snake* snake) {
     return false;
 }
 
+
+
 void update_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
-    if (state->flags[FLAG_GAME_PAUSED]) {
+    if (state->flags[FLAG_GAMERESET]) {
+        setup_game(state, snake, cherry_pos);
+    }
+    if (state->flags[FLAG_GAME_PAUSED] || state->flags[FLAG_GAMEOVER]) {
         return;
     }
     if (GetTime() - state->tick_time < state->tick_frames/GAME_FPS) {
@@ -567,27 +581,11 @@ void update_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
         }
     }
     if (self_collision(snake)) {
-        printf("hit ourselves\r\n");
         if (!state->flags[FLAG_INVINCIBLE]) {
             state->flags[FLAG_GAMEOVER] = true;
             state->flags[FLAG_GAMEWIN] = false;
         }
     }
-}
-
-void draw_debugtext(GameState* state, Snake* snake, iVec2D cherry_pos) {
-    int max_length = 100;
-    char stat_text[max_length];
-    snprintf(stat_text, max_length - 1, 
-        "snake_length: %d\n"
-        "cherry_pos: %d,%d\n"
-        "flag_invincible:%d\n"
-        "tick_frames:%f",
-        snake->length,
-        cherry_pos.x, cherry_pos.y,
-        state->flags[FLAG_INVINCIBLE],
-        state->tick_frames);
-    DrawText(stat_text, 10, 10, 8, RED);
 }
 
 void draw_background(Texture2D sprite_sheet, BackgroundSpriteIdx background) {
@@ -601,46 +599,98 @@ void draw_background(Texture2D sprite_sheet, BackgroundSpriteIdx background) {
     }
 }
 
+void draw_overlays(GameState* state, Snake snake, iVec2D cherry_pos){
+    if (state->flags[FLAG_GAMEOVER]) {
+        const char* msg = "GAME OVER";
+        Font font = GetFontDefault();
+        int fontsize = 30;
+        int spacing = 0;
+        Color col_overlay = {100,100,100,150};
+        DrawRectangle(0, 0, SCREEN_SIZE.x, SCREEN_SIZE.y, col_overlay);
+        Vector2 textsize = MeasureTextEx(font, msg, fontsize, spacing);
+        Vector2 position = {SCREEN_SIZE.x/2 - textsize.x/2, SCREEN_SIZE.y/2 - textsize.y/2};
+        DrawTextEx(font, msg, position, fontsize, 0.0f, WHITE);
+    }
+
+    if (state->flags[FLAG_SHOWDEBUG]) {
+        int max_length = 1000;
+        char stat_text[max_length];
+        int stat_count = 10;
+        const char* stat_strings[] = {
+            "snake_length: %d\n\n",
+            "cherry_pos: %d,%d\n\n",
+            "tick_frames: %2.1f\n\n",
+            "flag_invincible: %d\n\n",
+            "flag_paused: %d\n\n",
+            "flag_gameover: %d\n\n",
+            "flag_gamewin: %d\n\n"
+        };
+        int len = 0;
+        len += snprintf(stat_text, max_length, stat_strings[0], snake.length);
+        len += snprintf(stat_text + len, max_length, stat_strings[1], cherry_pos.x, cherry_pos.y);
+        len += snprintf(stat_text + len, max_length, stat_strings[2], state->tick_frames);
+        len += snprintf(stat_text + len, max_length, stat_strings[3], state->flags[FLAG_INVINCIBLE]);
+        len += snprintf(stat_text + len, max_length, stat_strings[4], state->flags[FLAG_GAME_PAUSED]);
+        len += snprintf(stat_text + len, max_length, stat_strings[5], state->flags[FLAG_GAMEOVER]);
+        len += snprintf(stat_text + len, max_length, stat_strings[6], state->flags[FLAG_GAMEWIN]);
+
+        DrawText(stat_text, 10, 10, 24, RED);
+    }
+}
+
 //TODO:: parse cmd line to get screen w/h and vsync/framerate
 int main(char** argv, int argc) {
     InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
     SetTargetFPS(GAME_FPS);
     
     GameState state;
-    init_state(&state);
-    
-    // Rectangle background_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH);
+    Snake snake;
     iVec2D cherry_pos;
-    iVec2D snake_start =  {2,2};
-    Snake* snake = make_snake(snake_start, peekf_dirqueue(&state.dir_queue), 2);
-    spawn_cherry(snake, &cherry_pos);
+    
+    init_state(&state);
+    init_snake(&snake);
+    setup_game(&state, &snake, &cherry_pos);
 
     //camera setup
     Camera2D camera = {0};
     camera.zoom = (float)SCREEN_SIZE.x / (GRID_SIZE.x * SQUARE_PIXEL_WIDTH) ; //base on screen width only right now.
+    Camera2D test_cam = {0};
+    test_cam.zoom = 5.0f;
 
+    RenderTexture2D background = LoadRenderTexture(GRID_SIZE.x * SQUARE_PIXEL_WIDTH, GRID_SIZE.y * SQUARE_PIXEL_WIDTH);
+    RenderTexture2D target = LoadRenderTexture(SCREEN_SIZE.x, SCREEN_SIZE.y);
     while (!WindowShouldClose()) {
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-        BeginMode2D(camera);
         
         handle_input(&state);
-        update_game(&state, snake, &cherry_pos);
+        update_game(&state, &snake, &cherry_pos);
 
+        //recreate background texture when it changes
+        if (state.flags[FLAG_BACKGROUNDCHANGE]) {
+            BeginTextureMode(background);
+            draw_background(state.textures[SPRITE_BACKGROUND_IDX], state.background);
+            EndTextureMode();
+            state.flags[FLAG_BACKGROUNDCHANGE] = false;
+        }
 
-        //Draw stuff
-        draw_background(state.textures[SPRITE_BACKGROUND_IDX], BACKGROUND_DIRT);
+        //render to main target
+        BeginTextureMode(target);
+        BeginMode2D(camera);
+        DrawTextureRec(background.texture, (Rectangle){0, 0, (float)background.texture.width, (float)background.texture.height}, (Vector2){0,0}, WHITE);
         draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
         draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
 
-        if (state.flags[FLAG_SHOWDEBUG]) {
-            draw_debugtext(&state, snake, cherry_pos);
-        }
+        EndTextureMode();
 
+        BeginDrawing();
+        DrawTextureRec(target.texture, 
+                (Rectangle){0, 0, (float)target.texture.width, -1 * (float)target.texture.height}, 
+                (Vector2){0, 0}, 
+                WHITE);
+        draw_overlays(&state, snake, cherry_pos);
         EndDrawing();
     }
     CloseWindow();
-    destroy_snake(snake);
+    destroy_snake(&snake);
 
     return 0;
 }
