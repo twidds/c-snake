@@ -71,6 +71,18 @@ typedef enum {
     FLAGS_COUNT
 } GameFlagIdx;
 
+typedef enum {
+    SCENE_GAME,
+    SCENE_MENU,
+    SCENE_SETTINGS //unused
+} Scene;
+
+typedef enum{
+    TARGET_BACKGROUND,
+    TARGET_OUTPUT,
+    TARGET_COUNT
+} RenderTarget;
+
 typedef struct DirectionQueue{
     Direction* buf;
     int length;
@@ -80,13 +92,22 @@ typedef struct DirectionQueue{
 typedef struct GameState{
     double tick_frames;
     double tick_time; //tracks time since last tick
+    iVec2D grid_size;
     DirectionQueue dir_queue;
-    Texture2D* textures;
     BackgroundSpriteIdx background;
-    bool* flags;
+    Scene current_scene;
+    Camera2D camera;
+    Texture2D textures[SPRITE_SHEET_COUNT];
+    RenderTexture2D render_targets[TARGET_COUNT];
+    bool flags[FLAGS_COUNT];
 } GameState;
 
-
+typedef struct RectangleButton {
+    int border_thickness;
+    Rectangle rectangle;
+    Color inner_color;
+    Color border_color;
+} RectangleButton;
 
 typedef struct Snake {
     Direction facing;
@@ -506,15 +527,27 @@ void draw_food(iVec2D food_pos, Texture2D sprite_sheet) {
 }
 
 void init_state(GameState* state) {
-    state->textures = malloc(sizeof(Texture2D) * SPRITE_SHEET_COUNT);
+    // state->textures = malloc(sizeof(Texture2D) * SPRITE_SHEET_COUNT);
     state->textures[SPRITE_FOOD_IDX] = LoadTexture("assets/food_spritesheet.bmp");
     state->textures[SPRITE_SNAKE_IDX] = LoadTexture("assets/snake_spritesheet.bmp");
     state->textures[SPRITE_BACKGROUND_IDX] = LoadTexture("assets/backgrounds_spritesheet.bmp");
-    // state->background = BACKGROUND_DIRT;
     
-    state->flags = malloc(sizeof(bool) * FLAGS_COUNT);
     init_dirqueue(&(state->dir_queue), KEY_QUEUE_LENGTH);
+    state->current_scene = SCENE_MENU;
+    state->grid_size = (iVec2D){8,8};
+    
+    // state->render_targets[TARGET_BACKGROUND] =LoadRenderTexture(GRID_SIZE.x * SQUARE_PIXEL_WIDTH, GRID_SIZE.y * SQUARE_PIXEL_WIDTH);
+    state->render_targets[TARGET_OUTPUT] = LoadRenderTexture(SCREEN_SIZE.x, SCREEN_SIZE.y);
+    // RenderTexture2D background = LoadRenderTexture(GRID_SIZE.x * SQUARE_PIXEL_WIDTH, GRID_SIZE.y * SQUARE_PIXEL_WIDTH);
+    // RenderTexture2D target = LoadRenderTexture(SCREEN_SIZE.x, SCREEN_SIZE.y);
 
+    // state->flags = malloc(sizeof(bool) * FLAGS_COUNT);
+
+}
+
+void destroy_state(GameState* state){
+    free(state->dir_queue.buf);
+    free(state);
 }
 
 void setup_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
@@ -528,6 +561,11 @@ void setup_game(GameState* state, Snake* snake, iVec2D* cherry_pos) {
     while (popf_dirqueue(&state->dir_queue)) {}
     set_snake(snake, (iVec2D){1,1}, DIR_DOWN, 2);
     spawn_cherry(snake, cherry_pos);
+
+    //setup camera
+    //setup render target for background
+    //setup grid size...?
+    //set current scene
 }
 
 //Returns true if snake head is colliding with the cherry
@@ -638,59 +676,111 @@ void draw_overlays(GameState* state, Snake snake, iVec2D cherry_pos){
     }
 }
 
-//TODO:: parse cmd line to get screen w/h and vsync/framerate
-int main(char** argv, int argc) {
-    InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
-    SetTargetFPS(GAME_FPS);
-    
-    GameState state;
-    Snake snake;
-    iVec2D cherry_pos;
-    
-    init_state(&state);
-    init_snake(&snake);
-    setup_game(&state, &snake, &cherry_pos);
+void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
+    //Input handling
+    // while(GetKeyPressed()) {} //clear key buffer
+    // Vector2 mouse_pos = GetMousePosition();
 
+    //Render menu
+    //TODO:: Move some of this stuff to a menu setup location
+    RenderTexture2D target = state->render_targets[TARGET_OUTPUT];
+    BeginTextureMode(target);
+    RectangleButton buttons[1];
+    RectangleButton* f = &buttons[0];
+    f->rectangle = (Rectangle){10, 10, 50, 20};
+    f->inner_color = WHITE;
+    f->border_color = BLACK;
+    f->border_thickness = 2;
+
+    ClearBackground(SKYBLUE);
+    Rectangle border_rect = (Rectangle){
+        f->rectangle.x - f->border_thickness,
+        f->rectangle.y - f->border_thickness,
+        f->rectangle.width + f->border_thickness * 2,
+        f->rectangle.height + f->border_thickness * 2
+        };
+    DrawRectangleRec(border_rect, f->border_color);
+    DrawRectangleRec(f->rectangle, f->inner_color);
+    EndTextureMode();
+
+    BeginDrawing();
+    DrawTextureRec(target.texture, 
+                (Rectangle){0, 0, (float)target.texture.width, -1 * (float)target.texture.height}, 
+                (Vector2){0, 0}, 
+                WHITE);
+    EndDrawing();
+}
+
+void run_game(GameState* state, Snake* snake, iVec2D cherry_pos) {
     //camera setup
     Camera2D camera = {0};
     camera.zoom = (float)SCREEN_SIZE.x / (GRID_SIZE.x * SQUARE_PIXEL_WIDTH) ; //base on screen width only right now.
     Camera2D test_cam = {0};
     test_cam.zoom = 5.0f;
 
-    RenderTexture2D background = LoadRenderTexture(GRID_SIZE.x * SQUARE_PIXEL_WIDTH, GRID_SIZE.y * SQUARE_PIXEL_WIDTH);
-    RenderTexture2D target = LoadRenderTexture(SCREEN_SIZE.x, SCREEN_SIZE.y);
+
+        // handle_input(&state);
+        // update_game(&state, &snake, &cherry_pos);
+
+        // //recreate background texture when it changes
+        // if (state.flags[FLAG_BACKGROUNDCHANGE]) {
+        //     BeginTextureMode(background);
+        //     draw_background(state.textures[SPRITE_BACKGROUND_IDX], state.background);
+        //     EndTextureMode();
+        //     state.flags[FLAG_BACKGROUNDCHANGE] = false;
+        // }
+
+        // //render to main target
+        // BeginTextureMode(target);
+        // BeginMode2D(camera);
+        // DrawTextureRec(background.texture, (Rectangle){0, 0, (float)background.texture.width, (float)background.texture.height}, (Vector2){0,0}, WHITE);
+        // draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
+        // draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
+
+        // EndTextureMode();
+
+        // BeginDrawing();
+        // DrawTextureRec(target.texture, 
+        //         (Rectangle){0, 0, (float)target.texture.width, -1 * (float)target.texture.height}, 
+        //         (Vector2){0, 0}, 
+        //         WHITE);
+        // draw_overlays(&state, snake, cherry_pos);
+        // EndDrawing();
+
+}
+
+//TODO:: parse cmd line to get screen w/h and vsync/framerate
+int main(char** argv, int argc) {
+    InitWindow(SCREEN_SIZE.x,SCREEN_SIZE.y, "c-snake");
+    SetTargetFPS(GAME_FPS);
+    
+    GameState* state = malloc(sizeof(GameState));
+    Snake snake;
+    iVec2D cherry_pos;
+    
+    init_state(state);
+    init_snake(&snake);
+    // setup_game(state, &snake, &cherry_pos);
+    // Scene curScene = SCENE_MENU;
+
+
     while (!WindowShouldClose()) {
-        
-        handle_input(&state);
-        update_game(&state, &snake, &cherry_pos);
-
-        //recreate background texture when it changes
-        if (state.flags[FLAG_BACKGROUNDCHANGE]) {
-            BeginTextureMode(background);
-            draw_background(state.textures[SPRITE_BACKGROUND_IDX], state.background);
-            EndTextureMode();
-            state.flags[FLAG_BACKGROUNDCHANGE] = false;
+        switch(state->current_scene) {
+            case SCENE_MENU:
+                run_menu(state, &snake, cherry_pos);
+                break;
+                //handle clicks/input
+                //render menu
+                //Once selections are made, need to setup the game.
+            case SCENE_GAME:
+                run_game(state, &snake, cherry_pos);
+                break;
         }
-
-        //render to main target
-        BeginTextureMode(target);
-        BeginMode2D(camera);
-        DrawTextureRec(background.texture, (Rectangle){0, 0, (float)background.texture.width, (float)background.texture.height}, (Vector2){0,0}, WHITE);
-        draw_food(cherry_pos, state.textures[SPRITE_FOOD_IDX]);
-        draw_snake(snake, state.textures[SPRITE_SNAKE_IDX]);
-
-        EndTextureMode();
-
-        BeginDrawing();
-        DrawTextureRec(target.texture, 
-                (Rectangle){0, 0, (float)target.texture.width, -1 * (float)target.texture.height}, 
-                (Vector2){0, 0}, 
-                WHITE);
-        draw_overlays(&state, snake, cherry_pos);
-        EndDrawing();
+        
     }
     CloseWindow();
     destroy_snake(&snake);
+    destroy_state(state);
 
     return 0;
 }

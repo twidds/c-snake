@@ -1,0 +1,6 @@
+- Add selection screen/main menu
+    - Select level size, select background
+- Add sounds
+- Add easter eggs (requires animation system)
+- Add more backgrounds
+
