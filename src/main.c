@@ -102,12 +102,17 @@ typedef struct GameState{
     bool flags[FLAGS_COUNT];
 } GameState;
 
-typedef struct RectangleButton {
-    int border_thickness;
-    Rectangle rectangle;
-    Color inner_color;
-    Color border_color;
-} RectangleButton;
+// typedef struct RectangleButton {
+//     int border_thickness;
+//     Rectangle rectangle;
+//     Color inner_color;
+//     Color border_color;
+// } RectangleButton;
+
+typedef enum {
+    ALIGN_LEFT,
+    ALIGN_CENTER
+} TextAlignment;
 
 typedef struct Snake {
     Direction facing;
@@ -115,6 +120,22 @@ typedef struct Snake {
     int length;
     int max_length;
 } Snake;
+
+typedef struct UiElement{
+    Rectangle rect;
+    bool draw_rect; //may be false for text only
+    
+    int border_thickness;
+    Color inner_color;
+    Color border_color;
+    
+    char* text;
+    Color text_color;
+    Font text_font;
+    float text_size;
+    float text_spacing;
+    TextAlignment text_align;
+} UiElement;
 
 
 void init_dirqueue(DirectionQueue* queue, int maxlength) {
@@ -676,6 +697,64 @@ void draw_overlays(GameState* state, Snake snake, iVec2D cherry_pos){
     }
 }
 
+//set default values for UI element (zeroing where appropriate)
+//DOES NOT CONSTRUCT ELEMENT
+//Relies on GetFontDefault from raylib
+void init_ui_element(UiElement* element) {
+    element->draw_rect = true;
+    element->rect = (Rectangle){0};
+
+    element->border_thickness = 0;
+    element->border_color = BLACK;
+    element->inner_color = WHITE;
+    
+    element->text = NULL;
+    element->text_color = BLACK;
+    element->text_font = GetFontDefault();
+    element->text_size = 12.0f;
+    element->text_spacing = 1.0f;
+    element->text_align = ALIGN_CENTER;
+}
+
+//Draw UI element to current render target
+void draw_uielement(UiElement* element) {
+    if (element->draw_rect) {
+        if (element->border_thickness) {
+            Rectangle border_rect = (Rectangle){
+                element->rect.x - element->border_thickness,
+                element->rect.y - element->border_thickness,
+                element->rect.width + element->border_thickness * 2,
+                element->rect.height + element->border_thickness * 2
+                };
+            DrawRectangleRec(border_rect, element->border_color);
+        }
+
+        DrawRectangleRec(element->rect, element->inner_color);
+    }
+    
+    if (element->text) {
+        Vector2 t_sz = MeasureTextEx(element->text_font, element->text, element->text_size, element->text_spacing);
+        Vector2 pos;
+        switch(element->text_align) {
+            case ALIGN_LEFT:
+                pos.x = element->rect.x;
+                pos.y = element->rect.y + element->rect.height/2 - t_sz.y / 2;
+                break;
+            case ALIGN_CENTER:
+                pos.x = element->rect.x + element->rect.width/2 - t_sz.x/2;
+                pos.y = element->rect.y + element->rect.height/2 - t_sz.y / 2;
+                break;
+        }
+
+        DrawTextEx(element->text_font, 
+            element->text, 
+            pos, 
+            element->text_size, 
+            element->text_spacing, 
+            element->text_color);
+    }
+}
+
 void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
     //Input handling
     // while(GetKeyPressed()) {} //clear key buffer
@@ -685,22 +764,15 @@ void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
     //TODO:: Move some of this stuff to a menu setup location
     RenderTexture2D target = state->render_targets[TARGET_OUTPUT];
     BeginTextureMode(target);
-    RectangleButton buttons[1];
-    RectangleButton* f = &buttons[0];
-    f->rectangle = (Rectangle){10, 10, 50, 20};
-    f->inner_color = WHITE;
-    f->border_color = BLACK;
-    f->border_thickness = 2;
+    UiElement f;
+    init_ui_element(&f);
+    f.rect = (Rectangle){10, 10, 150, 40};
+    f.text_size = 20.0f;
+    f.border_thickness = 0;
+    f.text = "Hello World";
 
     ClearBackground(SKYBLUE);
-    Rectangle border_rect = (Rectangle){
-        f->rectangle.x - f->border_thickness,
-        f->rectangle.y - f->border_thickness,
-        f->rectangle.width + f->border_thickness * 2,
-        f->rectangle.height + f->border_thickness * 2
-        };
-    DrawRectangleRec(border_rect, f->border_color);
-    DrawRectangleRec(f->rectangle, f->inner_color);
+    draw_uielement(&f);
     EndTextureMode();
 
     BeginDrawing();
