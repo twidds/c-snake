@@ -128,6 +128,10 @@ typedef struct UiElement{
     int border_thickness;
     Color inner_color;
     Color border_color;
+
+    bool draw_glow;
+    int glow_thickness;
+    Color glow_color;
     
     char* text;
     Color text_color;
@@ -707,6 +711,10 @@ void init_ui_element(UiElement* element) {
     element->border_thickness = 0;
     element->border_color = BLACK;
     element->inner_color = WHITE;
+
+    element->draw_glow = false;
+    element->glow_thickness = 0;
+    element->glow_color = (Color){0};
     
     element->text = NULL;
     element->text_color = BLACK;
@@ -718,6 +726,34 @@ void init_ui_element(UiElement* element) {
 
 //Draw UI element to current render target
 void draw_uielement(UiElement* element) {
+    if (element->draw_glow) {
+        DrawRectangleGradientV(element->rect.x,
+                    element->rect.y - element->glow_thickness,
+                    element->rect.width,
+                    element->glow_thickness,
+                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0},
+                    element->glow_color);
+        DrawRectangleGradientV(element->rect.x,
+                    element->rect.y + element->rect.height,
+                    element->rect.width,
+                    element->glow_thickness,
+                    element->glow_color,
+                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0});
+        DrawRectangleGradientH(element->rect.x - element->glow_thickness,
+                    element->rect.y,
+                    element->glow_thickness,
+                    element->rect.height,
+                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0},
+                    element->glow_color);
+        DrawRectangleGradientH(element->rect.x + element->rect.width,
+                    element->rect.y,
+                    element->glow_thickness,
+                    element->rect.height,
+                    element->glow_color,
+                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0});
+    }
+
+    
     if (element->draw_rect) {
         if (element->border_thickness) {
             Rectangle border_rect = (Rectangle){
@@ -755,6 +791,33 @@ void draw_uielement(UiElement* element) {
     }
 }
 
+//Just dumping raylib sound functions here for now
+void play_sound() {
+    // RLAPI void InitAudioDevice(void);                                     // Initialize audio device and context
+    // RLAPI void CloseAudioDevice(void);                                    // Close the audio device and context
+    // RLAPI bool IsAudioDeviceReady(void);                                  // Check if audio device has been initialized successfully
+    // RLAPI void SetMasterVolume(float volume);                             // Set master volume (listener)
+    // RLAPI float GetMasterVolume(void);                                    // Get master volume (listener)
+    // RLAPI Wave LoadWave(const char *fileName);                            // Load wave data from file
+    // RLAPI Sound LoadSound(const char *fileName);                          // Load sound from file
+    // RLAPI void PlaySound(Sound sound);                                    // Play a sound
+    // RLAPI void StopSound(Sound sound);                                    // Stop playing a sound
+    // RLAPI void PauseSound(Sound sound);                                   // Pause a sound
+    // RLAPI void ResumeSound(Sound sound);                                  // Resume a paused sound
+    // RLAPI bool IsSoundPlaying(Sound sound);                               // Check if a sound is currently playing
+    // RLAPI void SetSoundVolume(Sound sound, float volume);                 // Set volume for a sound (1.0 is max level)
+
+    // RLAPI Music LoadMusicStream(const char *fileName);                    // Load music stream from file
+    // RLAPI Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data, int dataSize); // Load music stream from data
+    // RLAPI bool IsMusicReady(Music music);                                 // Checks if a music stream is ready
+    // RLAPI void UnloadMusicStream(Music music);                            // Unload music stream
+    // RLAPI void PlayMusicStream(Music music);                              // Start music playing
+    // RLAPI void UpdateMusicStream(Music music);                            // Updates buffers for music streaming
+    // RLAPI void StopMusicStream(Music music);                              // Stop music playing
+    // RLAPI void PauseMusicStream(Music music);                             // Pause music playing
+    // RLAPI void ResumeMusicStream(Music music);                            // Resume playing paused music
+}
+
 void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
     //Input handling
     // while(GetKeyPressed()) {} //clear key buffer
@@ -766,10 +829,19 @@ void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
     BeginTextureMode(target);
     UiElement f;
     init_ui_element(&f);
-    f.rect = (Rectangle){10, 10, 150, 40};
-    f.text_size = 20.0f;
-    f.border_thickness = 0;
+    f.rect= (Rectangle){50, 50, 150, 40};
+    f.glow_thickness = 10;
+    f.draw_glow = true;
+    f.glow_color = (Color){10,240,0,255};
+    f.border_thickness = 2;
     f.text = "Hello World";
+
+
+    //Draw four rectangles for glow effect
+
+    //make a button do a thing?
+    //If mouse is hovering over element, give it a glow or something....
+    //input_handling needs to store
 
     ClearBackground(SKYBLUE);
     draw_uielement(&f);
