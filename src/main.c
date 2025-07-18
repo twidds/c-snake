@@ -111,7 +111,9 @@ typedef struct GameState{
 
 typedef enum {
     ALIGN_LEFT,
-    ALIGN_CENTER
+    ALIGN_CENTER,
+    ALIGN_BELOW,
+    ALIGN_ABOVE
 } TextAlignment;
 
 typedef struct Snake {
@@ -121,13 +123,27 @@ typedef struct Snake {
     int max_length;
 } Snake;
 
+typedef enum{
+    MENU_SIZETEXT,
+    MENU_SMALLSIZE,
+    MENU_MEDIUMSIZE,
+    MENU_LARGESIZE,
+    MENU_BACKGROUNDTEXT,
+    MENU_DIRTBACKGROUND,
+    MENU_WHITEBACKGROUND,
+    MENU_STARTGAME,
+    MENU_ITEMCOUNT
+} MenuElement;
+
 typedef struct UiElement{
-    Rectangle rect;
     bool draw_rect; //may be false for text only
-    
-    int border_thickness;
+    bool use_texture;
+    Rectangle rect;
     Color inner_color;
+    int border_thickness;
     Color border_color;
+    Rectangle texture_rect;
+    Texture2D inner_texture;
 
     bool draw_glow;
     int glow_thickness;
@@ -139,8 +155,17 @@ typedef struct UiElement{
     float text_size;
     float text_spacing;
     TextAlignment text_align;
+
+    int ui_group;
 } UiElement;
 
+typedef struct MenuUi{
+    int n_elements;
+    UiElement* elements;
+    MenuElement selected_size;
+    MenuElement selected_background;
+    // int* group_ids; //use for toggling selections
+} MenuUi;
 
 void init_dirqueue(DirectionQueue* queue, int maxlength) {
     queue->length = 0;
@@ -704,13 +729,16 @@ void draw_overlays(GameState* state, Snake snake, iVec2D cherry_pos){
 //set default values for UI element (zeroing where appropriate)
 //DOES NOT CONSTRUCT ELEMENT
 //Relies on GetFontDefault from raylib
-void init_ui_element(UiElement* element) {
+void init_uielement(UiElement* element) {
     element->draw_rect = true;
+    element->use_texture = false;
     element->rect = (Rectangle){0};
-
+    element->inner_color = WHITE;
     element->border_thickness = 0;
     element->border_color = BLACK;
-    element->inner_color = WHITE;
+    element->texture_rect = (Rectangle){0};
+    element->inner_texture = (Texture2D){0};
+
 
     element->draw_glow = false;
     element->glow_thickness = 0;
@@ -722,6 +750,8 @@ void init_ui_element(UiElement* element) {
     element->text_size = 12.0f;
     element->text_spacing = 1.0f;
     element->text_align = ALIGN_CENTER;
+    
+    element->ui_group = 0;
 }
 
 //Draw UI element to current render target
@@ -764,8 +794,12 @@ void draw_uielement(UiElement* element) {
                 };
             DrawRectangleRec(border_rect, element->border_color);
         }
+        if (element->use_texture) {
+            DrawTexturePro(element->inner_texture, element->texture_rect, element->rect, (Vector2){0,0}, 0.0f, WHITE);
+        } else {
+            DrawRectangleRec(element->rect, element->inner_color);
+        }
 
-        DrawRectangleRec(element->rect, element->inner_color);
     }
     
     if (element->text) {
@@ -779,6 +813,14 @@ void draw_uielement(UiElement* element) {
             case ALIGN_CENTER:
                 pos.x = element->rect.x + element->rect.width/2 - t_sz.x/2;
                 pos.y = element->rect.y + element->rect.height/2 - t_sz.y / 2;
+                break;
+            case ALIGN_ABOVE:
+                pos.x = element->rect.x + element->rect.width/2 - t_sz.x/2;
+                pos.y = element->rect.y - element->text_spacing - t_sz.y;
+                break;
+            case ALIGN_BELOW:
+                pos.x = element->rect.x + element->rect.width/2 - t_sz.x/2;
+                pos.y = element->rect.y + element->text_spacing + element->rect.height;
                 break;
         }
 
@@ -818,40 +860,92 @@ void play_sound() {
     // RLAPI void ResumeMusicStream(Music music);                            // Resume playing paused music
 }
 
-void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos){
-    //Input handling
-    // while(GetKeyPressed()) {} //clear key buffer
-    // Vector2 mouse_pos = GetMousePosition();
 
-    //Render menu
-    //TODO:: Move some of this stuff to a menu setup location
-    RenderTexture2D target = state->render_targets[TARGET_OUTPUT];
-    BeginTextureMode(target);
-    UiElement f;
-    init_ui_element(&f);
-    f.rect= (Rectangle){50, 50, 150, 40};
-    f.glow_thickness = 10;
-    f.draw_glow = true;
-    f.glow_color = (Color){10,240,0,255};
-    f.border_thickness = 2;
-    f.text = "Hello World";
+//Returns array of UI elements representing the menu items
+UiElement*  setup_menu(GameState* state) {
+    UiElement* items_out = malloc(sizeof(UiElement) * MENU_ITEMCOUNT);
+    for (int i = 0; i < MENU_ITEMCOUNT; i++) {
+        init_uielement(&items_out[i]);
+    }
+    items_out[MENU_SIZETEXT].draw_rect = false;
+    items_out[MENU_SIZETEXT].rect = (Rectangle){20, 20, 0, 0};
+    items_out[MENU_SIZETEXT].text = "Select grid size:";
+    items_out[MENU_SIZETEXT].text_align = ALIGN_LEFT;
+    items_out[MENU_SIZETEXT].text_size = 20.0f;
 
+    items_out[MENU_SMALLSIZE].draw_rect = true;
+    items_out[MENU_SMALLSIZE].border_thickness = 2;
+    items_out[MENU_SMALLSIZE].rect = (Rectangle){40, 40, 80, 30};
+    items_out[MENU_SMALLSIZE].text_align = ALIGN_CENTER;
+    items_out[MENU_SMALLSIZE].text = "8 x 8";
+    items_out[MENU_SMALLSIZE].text_size = 15.0f;
+    
+    items_out[MENU_MEDIUMSIZE].draw_rect = true;
+    items_out[MENU_MEDIUMSIZE].border_thickness = 2;
+    items_out[MENU_MEDIUMSIZE].rect = (Rectangle){170, 40, 80, 30};
+    items_out[MENU_MEDIUMSIZE].text_align = ALIGN_CENTER;
+    items_out[MENU_MEDIUMSIZE].text = "12 x 12";
+    items_out[MENU_MEDIUMSIZE].text_size = 15.0f;
 
-    //Draw four rectangles for glow effect
+    items_out[MENU_LARGESIZE].draw_rect = true;
+    items_out[MENU_LARGESIZE].border_thickness = 2;
+    items_out[MENU_LARGESIZE].rect = (Rectangle){300, 40, 80, 30};
+    items_out[MENU_LARGESIZE].text = "20 x 20";
+    items_out[MENU_LARGESIZE].text_align = ALIGN_CENTER;
+    items_out[MENU_LARGESIZE].text_size = 15.0f;
 
-    //make a button do a thing?
-    //If mouse is hovering over element, give it a glow or something....
-    //input_handling needs to store
+    items_out[MENU_BACKGROUNDTEXT].draw_rect = false;
+    items_out[MENU_BACKGROUNDTEXT].rect = (Rectangle){20, 100, 0, 0};
+    items_out[MENU_BACKGROUNDTEXT].text = "Select Background:";
+    items_out[MENU_BACKGROUNDTEXT].text_align = ALIGN_LEFT;
+    items_out[MENU_BACKGROUNDTEXT].text_size = 20.0f;
 
-    ClearBackground(SKYBLUE);
-    draw_uielement(&f);
-    EndTextureMode();
+    items_out[MENU_DIRTBACKGROUND].draw_rect = true;
+    items_out[MENU_DIRTBACKGROUND].border_thickness = 2;
+    items_out[MENU_DIRTBACKGROUND].rect = (Rectangle){40, 120, 80, 80};
+    items_out[MENU_DIRTBACKGROUND].use_texture = true;
+    items_out[MENU_DIRTBACKGROUND].inner_texture = state->textures[SPRITE_BACKGROUND_IDX];
+    items_out[MENU_DIRTBACKGROUND].texture_rect = GetSpriteRect(BACKGROUND_DIRT, SQUARE_PIXEL_WIDTH, false, false);
+    items_out[MENU_DIRTBACKGROUND].text_align = ALIGN_BELOW;
+    items_out[MENU_DIRTBACKGROUND].text_spacing = 2.0f;
+    items_out[MENU_DIRTBACKGROUND].text = "DIRT";
+    items_out[MENU_DIRTBACKGROUND].text_size = 15.0f;
+
+    items_out[MENU_WHITEBACKGROUND].draw_rect = true;
+    items_out[MENU_WHITEBACKGROUND].border_thickness = 2;
+    items_out[MENU_WHITEBACKGROUND].rect = (Rectangle){170, 120, 80, 80};
+    items_out[MENU_WHITEBACKGROUND].use_texture = true;
+    items_out[MENU_WHITEBACKGROUND].inner_texture = state->textures[SPRITE_BACKGROUND_IDX];
+    items_out[MENU_WHITEBACKGROUND].texture_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH, false, false);
+    items_out[MENU_WHITEBACKGROUND].text_align = ALIGN_BELOW;
+    items_out[MENU_WHITEBACKGROUND].text_spacing = 2.0f;
+    items_out[MENU_WHITEBACKGROUND].text = "TILE";
+    items_out[MENU_WHITEBACKGROUND].text_size = 15.0f;
+
+    items_out[MENU_STARTGAME].draw_rect = true;
+    items_out[MENU_STARTGAME].border_thickness = 2;
+    items_out[MENU_STARTGAME].rect = (Rectangle){170, 240, 180, 40};
+    items_out[MENU_STARTGAME].text = "START GAME";
+    items_out[MENU_STARTGAME].text_align = ALIGN_CENTER;
+    items_out[MENU_STARTGAME].text_size = 25.0f;
+    
+    return items_out;
+}
+
+void run_menu(GameState* state, Snake* snake, iVec2D cherry_pos, UiElement* menu_items){
+    //TODO:: resize the menu somewhere before we get here, in the setup....
+    //Check if we're inside an element
+        //If not already selected, give a slight glow effect
+    //Check if we clicked an element
+        //If part of a group, make sure single selected.
+        //If the start game, need to do some stuff to get ready for the game.
 
     BeginDrawing();
-    DrawTextureRec(target.texture, 
-                (Rectangle){0, 0, (float)target.texture.width, -1 * (float)target.texture.height}, 
-                (Vector2){0, 0}, 
-                WHITE);
+    ClearBackground(SKYBLUE);
+    for (int i = 0; i < MENU_ITEMCOUNT; i++) {
+
+        draw_uielement(&menu_items[i]);
+    }
     EndDrawing();
 }
 
@@ -904,6 +998,7 @@ int main(char** argv, int argc) {
     
     init_state(state);
     init_snake(&snake);
+    UiElement* menu_items = setup_menu(state);
     // setup_game(state, &snake, &cherry_pos);
     // Scene curScene = SCENE_MENU;
 
@@ -911,7 +1006,7 @@ int main(char** argv, int argc) {
     while (!WindowShouldClose()) {
         switch(state->current_scene) {
             case SCENE_MENU:
-                run_menu(state, &snake, cherry_pos);
+                run_menu(state, &snake, cherry_pos, menu_items);
                 break;
                 //handle clicks/input
                 //render menu
