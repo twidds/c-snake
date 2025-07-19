@@ -1,6 +1,9 @@
 - Add selection screen/main menu
     - Select level size, select background
+- Make screen resolution dynamic (different for menu/game, selectable from menu)
+- Add win screen
 - Add sounds
 - Add easter eggs (requires animation system)
 - Add more backgrounds
+- Add "particle" effects while eating cherry
 
