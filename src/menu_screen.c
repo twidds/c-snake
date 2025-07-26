@@ -18,10 +18,10 @@ typedef enum {
 } FoodSpriteIdx;
 
 typedef enum {
-    BACKGROUND_BLACK_BORDER,
+    BACKGROUND_WHITETILE,
     BACKGROUND_DIRT,
-    BACKGROUND_SPRITE_COUNT
-} BackgroundSpriteIdx;
+    BACKGROUND_COUNT
+} BackgroundSprite;
 
 typedef enum {
     ALIGN_LEFT,
@@ -30,17 +30,18 @@ typedef enum {
     ALIGN_ABOVE
 } TextAlignment;
 
-typedef enum{
-    MENU_SIZETEXT,
-    MENU_SMALLSIZE,
-    MENU_MEDIUMSIZE,
-    MENU_LARGESIZE,
-    MENU_BACKGROUNDTEXT,
-    MENU_DIRTBACKGROUND,
-    MENU_WHITEBACKGROUND,
-    MENU_STARTGAME,
-    MENU_ITEMCOUNT
-} MenuElement;
+typedef enum {
+    MAP_SMALLSIZE,
+    MAP_MEDIUMSIZE,
+    MAP_LARGESIZE,
+    MAP_SIZECOUNT
+} MapSize;
+
+// typedef enum {
+//     MENU_DIRTBACKGROUND,
+//     MENU_WHITEBACKGROUND,
+//     MENU_BACKGROUNDCOUNT
+// } MapBackground;
 
 
 typedef struct UiElement{
@@ -63,17 +64,29 @@ typedef struct UiElement{
     float text_size;
     float text_spacing;
     TextAlignment text_align;
-
-    int ui_group;
 } UiElement;
 
-typedef struct MenuUi{
-    int n_elements;
-    UiElement* elements;
-    MenuElement selected_size;
-    MenuElement selected_background;
-    Texture2D t2d_background;
-    // int* group_ids; //use for toggling selections
+typedef struct {
+    UiElement* boxes;
+    int count;
+    int selected; //none is -1
+    int hovering; //none is -1
+    Color hover_glow_color;
+    int hover_glow_thickness;
+    Color selected_glow_color;
+    int selected_glow_thickness;
+} UiBoxGroup;
+
+typedef struct MenuGui{
+    UiElement size_text;
+    UiBoxGroup map_sizes;
+
+    UiElement background_text;
+    UiBoxGroup map_backgrounds;
+    
+    UiElement start_button;
+    
+    Texture2D t2d_background; //TODO:: remove?
 } MenuGui;
 
 
@@ -121,79 +134,102 @@ void init_uielement(UiElement* element) {
     element->text_size = 12.0f;
     element->text_spacing = 1.0f;
     element->text_align = ALIGN_CENTER;
-    
-    element->ui_group = 0;
 }
 
+
 //Returns array of UI elements representing the menu items
-UiElement*  setup_menu(Texture2D background) {
-    UiElement* items_out = malloc(sizeof(UiElement) * MENU_ITEMCOUNT);
-    for (int i = 0; i < MENU_ITEMCOUNT; i++) {
-        init_uielement(&items_out[i]);
-    }
-    items_out[MENU_SIZETEXT].draw_rect = false;
-    items_out[MENU_SIZETEXT].rect = (Rectangle){20, 20, 0, 0};
-    items_out[MENU_SIZETEXT].text = "Select grid size:";
-    items_out[MENU_SIZETEXT].text_align = ALIGN_LEFT;
-    items_out[MENU_SIZETEXT].text_size = 20.0f;
+void setup_menu(MenuGui* menu) {
+    menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
 
-    items_out[MENU_SMALLSIZE].draw_rect = true;
-    items_out[MENU_SMALLSIZE].border_thickness = 2;
-    items_out[MENU_SMALLSIZE].rect = (Rectangle){40, 40, 80, 30};
-    items_out[MENU_SMALLSIZE].text_align = ALIGN_CENTER;
-    items_out[MENU_SMALLSIZE].text = "8 x 8";
-    items_out[MENU_SMALLSIZE].text_size = 15.0f;
+    menu->map_backgrounds.boxes = malloc(sizeof(UiElement) * BACKGROUND_COUNT);
+    menu->map_backgrounds.count = BACKGROUND_COUNT;
+
+    menu->map_sizes.boxes = malloc(sizeof(UiElement) * MAP_SIZECOUNT);
+    menu->map_sizes.count = MAP_SIZECOUNT;
     
-    items_out[MENU_MEDIUMSIZE].draw_rect = true;
-    items_out[MENU_MEDIUMSIZE].border_thickness = 2;
-    items_out[MENU_MEDIUMSIZE].rect = (Rectangle){170, 40, 80, 30};
-    items_out[MENU_MEDIUMSIZE].text_align = ALIGN_CENTER;
-    items_out[MENU_MEDIUMSIZE].text = "12 x 12";
-    items_out[MENU_MEDIUMSIZE].text_size = 15.0f;
+    //Map sizes
+    init_uielement(&menu->size_text);
+    menu->size_text.draw_rect = false;
+    menu->size_text.rect = (Rectangle){20, 20, 0, 0};
+    menu->size_text.text = "Select grid size:";
+    menu->size_text.text_align = ALIGN_LEFT;
+    menu->size_text.text_size = 20.0f;
 
-    items_out[MENU_LARGESIZE].draw_rect = true;
-    items_out[MENU_LARGESIZE].border_thickness = 2;
-    items_out[MENU_LARGESIZE].rect = (Rectangle){300, 40, 80, 30};
-    items_out[MENU_LARGESIZE].text = "20 x 20";
-    items_out[MENU_LARGESIZE].text_align = ALIGN_CENTER;
-    items_out[MENU_LARGESIZE].text_size = 15.0f;
-
-    items_out[MENU_BACKGROUNDTEXT].draw_rect = false;
-    items_out[MENU_BACKGROUNDTEXT].rect = (Rectangle){20, 100, 0, 0};
-    items_out[MENU_BACKGROUNDTEXT].text = "Select Background:";
-    items_out[MENU_BACKGROUNDTEXT].text_align = ALIGN_LEFT;
-    items_out[MENU_BACKGROUNDTEXT].text_size = 20.0f;
-
-    items_out[MENU_DIRTBACKGROUND].draw_rect = true;
-    items_out[MENU_DIRTBACKGROUND].border_thickness = 2;
-    items_out[MENU_DIRTBACKGROUND].rect = (Rectangle){40, 120, 80, 80};
-    items_out[MENU_DIRTBACKGROUND].use_texture = true;
-    items_out[MENU_DIRTBACKGROUND].inner_texture = background;
-    items_out[MENU_DIRTBACKGROUND].texture_rect = GetSpriteRect(BACKGROUND_DIRT, SQUARE_PIXEL_WIDTH, false, false);
-    items_out[MENU_DIRTBACKGROUND].text_align = ALIGN_BELOW;
-    items_out[MENU_DIRTBACKGROUND].text_spacing = 2.0f;
-    items_out[MENU_DIRTBACKGROUND].text = "DIRT";
-    items_out[MENU_DIRTBACKGROUND].text_size = 15.0f;
-
-    items_out[MENU_WHITEBACKGROUND].draw_rect = true;
-    items_out[MENU_WHITEBACKGROUND].border_thickness = 2;
-    items_out[MENU_WHITEBACKGROUND].rect = (Rectangle){170, 120, 80, 80};
-    items_out[MENU_WHITEBACKGROUND].use_texture = true;
-    items_out[MENU_WHITEBACKGROUND].inner_texture = background;
-    items_out[MENU_WHITEBACKGROUND].texture_rect = GetSpriteRect(BACKGROUND_BLACK_BORDER, SQUARE_PIXEL_WIDTH, false, false);
-    items_out[MENU_WHITEBACKGROUND].text_align = ALIGN_BELOW;
-    items_out[MENU_WHITEBACKGROUND].text_spacing = 2.0f;
-    items_out[MENU_WHITEBACKGROUND].text = "TILE";
-    items_out[MENU_WHITEBACKGROUND].text_size = 15.0f;
-
-    items_out[MENU_STARTGAME].draw_rect = true;
-    items_out[MENU_STARTGAME].border_thickness = 2;
-    items_out[MENU_STARTGAME].rect = (Rectangle){170, 240, 180, 40};
-    items_out[MENU_STARTGAME].text = "START GAME";
-    items_out[MENU_STARTGAME].text_align = ALIGN_CENTER;
-    items_out[MENU_STARTGAME].text_size = 25.0f;
+    menu->map_sizes.selected = MAP_MEDIUMSIZE;
+    menu->map_sizes.hover_glow_color = GREEN;
+    menu->map_sizes.hover_glow_thickness = 10;
+    menu->map_sizes.selected_glow_color = ORANGE;
+    menu->map_sizes.selected_glow_thickness = 15;
     
-    return items_out;
+    init_uielement(&menu->map_sizes.boxes[MAP_SMALLSIZE]);
+    menu->map_sizes.boxes[MAP_SMALLSIZE].draw_rect = true;
+    menu->map_sizes.boxes[MAP_SMALLSIZE].border_thickness = 2;
+    menu->map_sizes.boxes[MAP_SMALLSIZE].rect = (Rectangle){40, 40, 80, 30};
+    menu->map_sizes.boxes[MAP_SMALLSIZE].text_align = ALIGN_CENTER;
+    menu->map_sizes.boxes[MAP_SMALLSIZE].text = "8 x 8";
+    menu->map_sizes.boxes[MAP_SMALLSIZE].text_size = 15.0f;
+    
+    init_uielement(&menu->map_sizes.boxes[MAP_MEDIUMSIZE]);
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].draw_rect = true;
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].border_thickness = 2;
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].rect = (Rectangle){170, 40, 80, 30};
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text_align = ALIGN_CENTER;
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text = "12 x 12";
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text_size = 15.0f;
+
+    init_uielement(&menu->map_sizes.boxes[MAP_LARGESIZE]);
+    menu->map_sizes.boxes[MAP_LARGESIZE].draw_rect = true;
+    menu->map_sizes.boxes[MAP_LARGESIZE].border_thickness = 2;
+    menu->map_sizes.boxes[MAP_LARGESIZE].rect = (Rectangle){300, 40, 80, 30};
+    menu->map_sizes.boxes[MAP_LARGESIZE].text = "20 x 20";
+    menu->map_sizes.boxes[MAP_LARGESIZE].text_align = ALIGN_CENTER;
+    menu->map_sizes.boxes[MAP_LARGESIZE].text_size = 15.0f;
+
+    //Map backgrounds
+    init_uielement(&menu->background_text);
+    menu->background_text.draw_rect = false;
+    menu->background_text.rect = (Rectangle){20, 100, 0, 0};
+    menu->background_text.text = "Select Background:";
+    menu->background_text.text_align = ALIGN_LEFT;
+    menu->background_text.text_size = 20.0f;
+    menu->map_backgrounds.selected = BACKGROUND_DIRT;
+    menu->map_backgrounds.hover_glow_color = BLUE;
+    menu->map_backgrounds.hover_glow_thickness = 10;
+    menu->map_backgrounds.selected_glow_color = RED;
+    menu->map_backgrounds.selected_glow_thickness = 15;
+    
+    init_uielement(&menu->map_backgrounds.boxes[BACKGROUND_DIRT]);
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].draw_rect = true;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].border_thickness = 2;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].rect = (Rectangle){40, 120, 80, 80};
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].use_texture = true;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].inner_texture = menu->t2d_background;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].texture_rect = GetSpriteRect(BACKGROUND_DIRT, SQUARE_PIXEL_WIDTH, false, false);
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_align = ALIGN_BELOW;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_spacing = 2.0f;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text = "DIRT";
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_size = 15.0f;
+
+    init_uielement(&menu->map_backgrounds.boxes[BACKGROUND_WHITETILE]);
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].draw_rect = true;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].border_thickness = 2;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].rect = (Rectangle){170, 120, 80, 80};
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].use_texture = true;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].inner_texture = menu->t2d_background;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].texture_rect = GetSpriteRect(BACKGROUND_WHITETILE, SQUARE_PIXEL_WIDTH, false, false);
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_align = ALIGN_BELOW;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_spacing = 2.0f;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text = "TILE";
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_size = 15.0f;
+
+    //Start button
+    init_uielement(&menu->start_button);
+    menu->start_button.draw_rect = true;
+    menu->start_button.border_thickness = 2;
+    menu->start_button.rect = (Rectangle){170, 240, 180, 40};
+    menu->start_button.text = "START GAME";
+    menu->start_button.text_align = ALIGN_CENTER;
+    menu->start_button.text_size = 25.0f;
 }
 
 //Draw UI element to current render target
@@ -276,14 +312,23 @@ void draw_uielement(UiElement* element) {
 }
 
 
+void draw_uiboxgroup(UiBoxGroup* group) {
+    //handle glow effect based on selected
+    //handle glow effect based on hover
+    for (int i = 0; i < group->count; i++) {
+        draw_uielement(&group->boxes[i]);
+    }
+}
+
 
 void setup_menuscreen(GameState* state) {
     state->screen_size = (iVec2D){800,800};
     SetWindowSize(state->screen_size.x, state->screen_size.y);
     
     MenuGui* menu = malloc(sizeof(MenuGui));
-    menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
-    menu->elements = setup_menu(menu->t2d_background);
+    setup_menu(menu);
+    // menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    // menu->text_elements = setup_menu(menu->t2d_background);
     
     state->screen_memory = menu;
 }
@@ -296,15 +341,22 @@ void draw_menuscreen(GameState* state) {
     MenuGui* menu = state->screen_memory;
     BeginDrawing();
     ClearBackground(SKYBLUE);
-    for (int i = 0; i < MENU_ITEMCOUNT; i++) {
-        draw_uielement(&menu->elements[i]);
-    }
+    
+    draw_uielement(&menu->size_text);
+    draw_uiboxgroup(&menu->map_sizes);
+    
+    draw_uielement(&menu->background_text);
+    draw_uiboxgroup(&menu->map_backgrounds);
+    
+    draw_uielement(&menu->start_button);
+    
     EndDrawing();
 }
 
 void unload_menuscreen(GameState* state) {
     MenuGui* menu = state->screen_memory;
     UnloadTexture(menu->t2d_background);
-    free(menu->elements);
+    free(menu->map_backgrounds.boxes);
+    free(menu->map_sizes.boxes);
     free(menu);
 }
