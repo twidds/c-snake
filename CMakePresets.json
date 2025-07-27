@@ -21,6 +21,22 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE":"Debug"
             }
+        },
+        {
+            "name": "msys-build-release",
+            "binaryDir": "${sourceDir}/build/release",
+            "generator": "MSYS Makefiles",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":"Release"
+            }
+        },
+        {
+            "name": "msys-build-debug",
+            "binaryDir": "${sourceDir}/build/debug",
+            "generator": "MSYS Makefiles",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":"Debug"
+            }
         }
     ]
 }
