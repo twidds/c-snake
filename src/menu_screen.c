@@ -146,90 +146,96 @@ void setup_menu(MenuGui* menu) {
 
     menu->map_sizes.boxes = malloc(sizeof(UiElement) * MAP_SIZECOUNT);
     menu->map_sizes.count = MAP_SIZECOUNT;
+
+    //Layout constants
+    const int text_lx = 20;
+
+    const int box_lx = 80;
+    const int box_w = 150;
+    const int box_h = 50;
+    const int box_xsp = 40;
     
+    const int sztxt_y = 60;
+    const int mapbox_y = 100;
+    const int backtxt_y = 200;
+    const int backbox_y = 240;
+    const int startbox_y = 460;
+    
+    UiElement text_base;
+    init_uielement(&text_base);
+    text_base.draw_rect = false;
+    text_base.text_align = ALIGN_LEFT;
+    text_base.text_size = 40.0f;
+
+    UiElement size_boxbase;
+    init_uielement(&size_boxbase);
+    size_boxbase.draw_rect = true;
+    size_boxbase.border_thickness = 2;
+    size_boxbase.text_align = ALIGN_CENTER;
+    size_boxbase.text_size = 40.0f;
+    
+    UiElement back_boxbase;
+    init_uielement(&back_boxbase);
+    back_boxbase.draw_rect = true;
+    back_boxbase.border_thickness = 2;
+    back_boxbase.use_texture = true;
+    back_boxbase.inner_texture = menu->t2d_background;
+    back_boxbase.text_align = ALIGN_BELOW;
+    back_boxbase.text_spacing = 4.0f;
+    back_boxbase.text_size = 30.0f;
+
     //Map sizes
-    init_uielement(&menu->size_text);
-    menu->size_text.draw_rect = false;
-    menu->size_text.rect = (Rectangle){20, 20, 0, 0};
+    menu->size_text = text_base;
+    menu->size_text.rect = (Rectangle){text_lx, sztxt_y, 0, 0};
     menu->size_text.text = "Select grid size:";
-    menu->size_text.text_align = ALIGN_LEFT;
-    menu->size_text.text_size = 20.0f;
 
     menu->map_sizes.selected = MAP_MEDIUMSIZE;
     menu->map_sizes.hover_glow_color = GREEN;
     menu->map_sizes.hover_glow_thickness = 10;
     menu->map_sizes.selected_glow_color = ORANGE;
     menu->map_sizes.selected_glow_thickness = 15;
-    
-    init_uielement(&menu->map_sizes.boxes[MAP_SMALLSIZE]);
-    menu->map_sizes.boxes[MAP_SMALLSIZE].draw_rect = true;
-    menu->map_sizes.boxes[MAP_SMALLSIZE].border_thickness = 2;
-    menu->map_sizes.boxes[MAP_SMALLSIZE].rect = (Rectangle){40, 40, 80, 30};
-    menu->map_sizes.boxes[MAP_SMALLSIZE].text_align = ALIGN_CENTER;
-    menu->map_sizes.boxes[MAP_SMALLSIZE].text = "8 x 8";
-    menu->map_sizes.boxes[MAP_SMALLSIZE].text_size = 15.0f;
-    
-    init_uielement(&menu->map_sizes.boxes[MAP_MEDIUMSIZE]);
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].draw_rect = true;
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].border_thickness = 2;
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].rect = (Rectangle){170, 40, 80, 30};
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text_align = ALIGN_CENTER;
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text = "12 x 12";
-    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text_size = 15.0f;
 
-    init_uielement(&menu->map_sizes.boxes[MAP_LARGESIZE]);
-    menu->map_sizes.boxes[MAP_LARGESIZE].draw_rect = true;
-    menu->map_sizes.boxes[MAP_LARGESIZE].border_thickness = 2;
-    menu->map_sizes.boxes[MAP_LARGESIZE].rect = (Rectangle){300, 40, 80, 30};
+    menu->map_sizes.boxes[MAP_SMALLSIZE] = size_boxbase;
+    menu->map_sizes.boxes[MAP_SMALLSIZE].rect = (Rectangle){box_lx, mapbox_y, box_w, box_h};
+    menu->map_sizes.boxes[MAP_SMALLSIZE].text = "8 x 8";
+
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE] = size_boxbase;
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].rect = (Rectangle){box_lx + (box_w + box_xsp), mapbox_y, box_w, box_h};
+    menu->map_sizes.boxes[MAP_MEDIUMSIZE].text = "12 x 12";
+
+    menu->map_sizes.boxes[MAP_LARGESIZE] = size_boxbase;
+    menu->map_sizes.boxes[MAP_LARGESIZE].rect = (Rectangle){box_lx + (box_w + box_xsp)*2, mapbox_y, box_w, box_h};
     menu->map_sizes.boxes[MAP_LARGESIZE].text = "20 x 20";
-    menu->map_sizes.boxes[MAP_LARGESIZE].text_align = ALIGN_CENTER;
-    menu->map_sizes.boxes[MAP_LARGESIZE].text_size = 15.0f;
 
     //Map backgrounds
-    init_uielement(&menu->background_text);
-    menu->background_text.draw_rect = false;
-    menu->background_text.rect = (Rectangle){20, 100, 0, 0};
+    menu->background_text = text_base;
+    menu->background_text.rect = (Rectangle){text_lx, backtxt_y, 0, 0};
     menu->background_text.text = "Select Background:";
-    menu->background_text.text_align = ALIGN_LEFT;
-    menu->background_text.text_size = 20.0f;
+    
     menu->map_backgrounds.selected = BACKGROUND_DIRT;
     menu->map_backgrounds.hover_glow_color = BLUE;
     menu->map_backgrounds.hover_glow_thickness = 10;
     menu->map_backgrounds.selected_glow_color = RED;
     menu->map_backgrounds.selected_glow_thickness = 15;
     
-    init_uielement(&menu->map_backgrounds.boxes[BACKGROUND_DIRT]);
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].draw_rect = true;
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].border_thickness = 2;
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].rect = (Rectangle){40, 120, 80, 80};
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].use_texture = true;
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].inner_texture = menu->t2d_background;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT] = back_boxbase;
+    menu->map_backgrounds.boxes[BACKGROUND_DIRT].rect = (Rectangle){box_lx, backbox_y, box_w, box_w};
     menu->map_backgrounds.boxes[BACKGROUND_DIRT].texture_rect = GetSpriteRect(BACKGROUND_DIRT, SQUARE_PIXEL_WIDTH, false, false);
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_align = ALIGN_BELOW;
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_spacing = 2.0f;
     menu->map_backgrounds.boxes[BACKGROUND_DIRT].text = "DIRT";
-    menu->map_backgrounds.boxes[BACKGROUND_DIRT].text_size = 15.0f;
 
-    init_uielement(&menu->map_backgrounds.boxes[BACKGROUND_WHITETILE]);
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].draw_rect = true;
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].border_thickness = 2;
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].rect = (Rectangle){170, 120, 80, 80};
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].use_texture = true;
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].inner_texture = menu->t2d_background;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE] = back_boxbase;
+    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].rect = (Rectangle){box_lx + box_w + box_xsp, backbox_y, box_w, box_w};
     menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].texture_rect = GetSpriteRect(BACKGROUND_WHITETILE, SQUARE_PIXEL_WIDTH, false, false);
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_align = ALIGN_BELOW;
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_spacing = 2.0f;
     menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text = "TILE";
-    menu->map_backgrounds.boxes[BACKGROUND_WHITETILE].text_size = 15.0f;
 
     //Start button
     init_uielement(&menu->start_button);
     menu->start_button.draw_rect = true;
     menu->start_button.border_thickness = 2;
-    menu->start_button.rect = (Rectangle){170, 240, 180, 40};
+    menu->start_button.rect = (Rectangle){170, startbox_y, 200, 40};
     menu->start_button.text = "START GAME";
     menu->start_button.text_align = ALIGN_CENTER;
-    menu->start_button.text_size = 25.0f;
+    menu->start_button.text_size = 30.0f;
 }
 
 //Draw UI element to current render target
@@ -322,7 +328,7 @@ void draw_uiboxgroup(UiBoxGroup* group) {
 
 
 void setup_menuscreen(GameState* state) {
-    state->screen_size = (iVec2D){800,800};
+    state->screen_size = (iVec2D){1000,1000};
     SetWindowSize(state->screen_size.x, state->screen_size.y);
     
     MenuGui* menu = malloc(sizeof(MenuGui));
