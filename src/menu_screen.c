@@ -92,7 +92,10 @@ typedef struct {
 } ElementArena;
 
 typedef struct MenuGui{
-    UiElement* mouse_selected;
+    UiElement* mouse_overelem;
+    UiElement* mouse_downelem;
+    UiElement* clicked_elem;
+
     ElementArena elem_arena;
     UiElement* size_text;
     UiBoxGroup map_sizes;
@@ -193,6 +196,9 @@ UiElement* elemarena_addelems(ElementArena* arena, int count) {
 //Returns array of UI elements representing the menu items
 void setup_menu(MenuGui* menu, GameState* state) {
     menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    menu->mouse_overelem = NULL;
+    menu->mouse_downelem = NULL;
+    menu->clicked_elem = NULL;
 
     //Allocate elements
     elemarena_alloc(&menu->elem_arena, 15);
@@ -432,9 +438,42 @@ void setup_menuscreen(GameState* state) {
     state->screen_memory = menu;
 }
 
+bool is_inelementbounds(UiElement* elem, Vector2 pos) {
+    return  elem->rect.x < pos.x &&
+            elem->rect.y < pos.y &&
+            elem->rect.x + elem->rect.width > pos.x &&
+            elem->rect.y + elem->rect.height > pos.y;
+}
+
 void update_menuscreen(GameState* state) {
-    //check mouse positions and click states here
+    MenuGui* menu = state->screen_memory;
+    menu->mouse_overelem = NULL;
+    menu->clicked_elem = NULL;
+    
+    
     Vector2 mouse_pos = GetMousePosition();
+    for (int i = 0; i < menu->elem_arena.count; i++) {
+        if (is_inelementbounds(&menu->elem_arena.buffer[i], mouse_pos)) {
+            menu->mouse_overelem = &menu->elem_arena.buffer[i];
+        }
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && 
+                    menu->mouse_overelem && 
+                    menu->mouse_overelem == menu->mouse_downelem) {
+            menu->clicked_elem = menu->mouse_overelem;
+            menu->mouse_downelem = NULL;
+        }
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && menu->mouse_overelem) {
+            menu->mouse_downelem = menu->mouse_overelem;
+        }
+    }
+
+    //TESTING:
+    for (int i = 0; i < menu->resolutions.count; i++) {
+        if (menu->clicked_elem == &menu->resolutions.boxes[i]) {
+            menu->clicked_elem->border_color = RED;
+        }
+    }
+
     //if we click and release on a button, it's selected
     
     // IsMouseButtonPressed
