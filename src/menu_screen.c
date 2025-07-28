@@ -85,17 +85,25 @@ typedef struct {
     int selected_glow_thickness;
 } UiBoxGroup;
 
+typedef struct {
+    int count;
+    int max;
+    UiElement* buffer;
+} ElementArena;
+
 typedef struct MenuGui{
-    UiElement size_text;
+    UiElement* mouse_selected;
+    ElementArena elem_arena;
+    UiElement* size_text;
     UiBoxGroup map_sizes;
 
-    UiElement background_text;
+    UiElement* background_text;
     UiBoxGroup map_backgrounds;
 
-    UiElement resolution_text;
+    UiElement* resolution_text;
     UiBoxGroup resolutions;
     
-    UiElement start_button;
+    UiElement* start_button;
     
     Texture2D t2d_background; //TODO:: remove?
 } MenuGui;
@@ -147,18 +155,60 @@ void init_uielement(UiElement* element) {
     element->text_align = ALIGN_CENTER;
 }
 
+void elemarena_alloc(ElementArena* arena, int size) {
+    if (arena->buffer) {free(arena->buffer);}
+    arena->buffer = malloc(sizeof(UiElement) * size);
+    arena->count = 0;
+    arena->max = size;
+}
+
+void elemarena_dealloc(ElementArena* arena) {
+    if (arena->buffer) {
+        free(arena->buffer);
+    }
+    arena->count = 0;
+    arena->max = 0;
+}
+
+//Adds a number of elements to the GUI, returns pointer to first in the new range of elements.
+//If there's not enough room, arena buffer is reallocated.
+UiElement* elemarena_addelems(ElementArena* arena, int count) {
+    if (count + arena->count > arena->max) {
+        int newmax = (count + arena->count) * 1.5;
+        UiElement* newbuf = malloc(sizeof(UiElement) * newmax);
+        for (int i = 0; i < arena->count; i++) {
+            newbuf[i] = arena->buffer[i];
+        }
+        free(arena->buffer);
+        arena->buffer = newbuf;
+        arena->max = newmax;
+    }
+
+    UiElement* start = &arena->buffer[arena->count];
+    arena->count += count;
+    return start;
+}
+
 
 //Returns array of UI elements representing the menu items
 void setup_menu(MenuGui* menu, GameState* state) {
     menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
 
-    menu->map_backgrounds.boxes = malloc(sizeof(UiElement) * BACKGROUND_COUNT);
+    //Allocate elements
+    elemarena_alloc(&menu->elem_arena, 15);
+    
+    menu->size_text = elemarena_addelems(&menu->elem_arena, 1);
+    menu->background_text = elemarena_addelems(&menu->elem_arena, 1);
+    menu->resolution_text = elemarena_addelems(&menu->elem_arena, 1);
+    menu->start_button = elemarena_addelems(&menu->elem_arena, 1);
+
+    menu->map_backgrounds.boxes = elemarena_addelems(&menu->elem_arena, BACKGROUND_COUNT);
     menu->map_backgrounds.count = BACKGROUND_COUNT;
 
-    menu->map_sizes.boxes = malloc(sizeof(UiElement) * MAP_SIZECOUNT);
+    menu->map_sizes.boxes = elemarena_addelems(&menu->elem_arena, MAP_SIZECOUNT);
     menu->map_sizes.count = MAP_SIZECOUNT;
 
-    menu->resolutions.boxes = malloc(sizeof(UiElement) * RES_COUNT);
+    menu->resolutions.boxes = elemarena_addelems(&menu->elem_arena, RES_COUNT);
     menu->resolutions.count = RES_COUNT;
 
     //Layout constants
@@ -205,9 +255,9 @@ void setup_menu(MenuGui* menu, GameState* state) {
     back_boxbase.text_size = 30.0f;
 
     //Resolution sizes
-    menu->resolution_text = text_base;
-    menu->resolution_text.rect = (Rectangle){text_lx, restxt_y, 0, 0};
-    menu->resolution_text.text = "Select game resolution";
+    *menu->resolution_text = text_base;
+    menu->resolution_text->rect = (Rectangle){text_lx, restxt_y, 0, 0};
+    menu->resolution_text->text = "Select game resolution";
 
     menu->resolutions.boxes[RES_800x800] = res_size_boxbase;
     menu->resolutions.boxes[RES_800x800].rect = (Rectangle){box_lx, resbox_y, box_w, box_h};
@@ -226,9 +276,9 @@ void setup_menu(MenuGui* menu, GameState* state) {
     menu->resolutions.boxes[RES_2080x2080].text = "2080 x 2080";
     
     //Map sizes
-    menu->size_text = text_base;
-    menu->size_text.rect = (Rectangle){text_lx, sztxt_y, 0, 0};
-    menu->size_text.text = "Select grid size:";
+    *menu->size_text = text_base;
+    menu->size_text->rect = (Rectangle){text_lx, sztxt_y, 0, 0};
+    menu->size_text->text = "Select grid size:";
 
     menu->map_sizes.selected = MAP_MEDIUMSIZE;
     menu->map_sizes.hover_glow_color = GREEN;
@@ -249,9 +299,9 @@ void setup_menu(MenuGui* menu, GameState* state) {
     menu->map_sizes.boxes[MAP_LARGESIZE].text = "20 x 20";
 
     //Map backgrounds
-    menu->background_text = text_base;
-    menu->background_text.rect = (Rectangle){text_lx, backtxt_y, 0, 0};
-    menu->background_text.text = "Select Background:";
+    *menu->background_text = text_base;
+    menu->background_text->rect = (Rectangle){text_lx, backtxt_y, 0, 0};
+    menu->background_text->text = "Select Background:";
     
     menu->map_backgrounds.selected = BACKGROUND_DIRT;
     menu->map_backgrounds.hover_glow_color = BLUE;
@@ -272,13 +322,13 @@ void setup_menu(MenuGui* menu, GameState* state) {
     //Start button
     int startbox_w = 200;
     int startbox_x = state->screen_size.x / 2 - startbox_w/2;
-    init_uielement(&menu->start_button);
-    menu->start_button.draw_rect = true;
-    menu->start_button.border_thickness = 2;
-    menu->start_button.rect = (Rectangle){startbox_x, startbox_y, 200, 40};
-    menu->start_button.text = "START GAME";
-    menu->start_button.text_align = ALIGN_CENTER;
-    menu->start_button.text_size = 30.0f;
+    init_uielement(menu->start_button);
+    menu->start_button->draw_rect = true;
+    menu->start_button->border_thickness = 2;
+    menu->start_button->rect = (Rectangle){startbox_x, startbox_y, 200, 40};
+    menu->start_button->text = "START GAME";
+    menu->start_button->text_align = ALIGN_CENTER;
+    menu->start_button->text_size = 30.0f;
 }
 
 //Draw UI element to current render target
@@ -384,6 +434,12 @@ void setup_menuscreen(GameState* state) {
 
 void update_menuscreen(GameState* state) {
     //check mouse positions and click states here
+    Vector2 mouse_pos = GetMousePosition();
+    //if we click and release on a button, it's selected
+    
+    // IsMouseButtonPressed
+    // IsMouseButtonReleased
+
 }
 
 void draw_menuscreen(GameState* state) {
@@ -391,16 +447,16 @@ void draw_menuscreen(GameState* state) {
     BeginDrawing();
     ClearBackground(SKYBLUE);
     
-    draw_uielement(&menu->resolution_text);
+    draw_uielement(menu->resolution_text);
     draw_uiboxgroup(&menu->resolutions);
 
-    draw_uielement(&menu->size_text);
+    draw_uielement(menu->size_text);
     draw_uiboxgroup(&menu->map_sizes);
     
-    draw_uielement(&menu->background_text);
+    draw_uielement(menu->background_text);
     draw_uiboxgroup(&menu->map_backgrounds);
     
-    draw_uielement(&menu->start_button);
+    draw_uielement(menu->start_button);
     
     EndDrawing();
 }
@@ -408,8 +464,6 @@ void draw_menuscreen(GameState* state) {
 void unload_menuscreen(GameState* state) {
     MenuGui* menu = state->screen_memory;
     UnloadTexture(menu->t2d_background);
-    free(menu->map_backgrounds.boxes);
-    free(menu->map_sizes.boxes);
-    free(menu->resolutions.boxes);
+    elemarena_dealloc(&menu->elem_arena);
     free(menu);
 }
