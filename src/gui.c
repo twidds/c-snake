@@ -1,252 +1,279 @@
 #include "gui.h"
-#include <stdlib.h> //malloc, NULL
+#include <string.h> //memcpy
 
 #define ELEM_ARENA_STARTSIZE 10 * sizeof(UiElement)
 #define BOXGROUP_ARENA_STARTSIZE 10 * sizeof(UiBoxGroup)
 #define TEXT_ARENA_STARTSIZE 1024 * sizeof(char)
 #define BOXGROUP_STARTSIZE 10
-#define ARENA_DEFAULTSIZE 2048 //bytes
-
-
-/*  --------------------------------------------------------------------------------------- /
-                                Arena Memory Functions
-    --------------------------------------------------------------------------------------- */
-static void arena_init_withsize(Arena* arena, size_t size) {
-    arena->buffer = malloc(sizeof(char) * size);
-    arena->free = arena->buffer;
-    arena->end = arena->buffer + size;
-    arena->next_id = 1;
-}
-
-static void arena_init(Arena* arena) {
-    arena_init_withsize(arena, ARENA_DEFAULTSIZE);
-}
-
-static void* arena_alloc(Arena* arena, size_t size, size_t count){
-    size_t bump_bytes = size * count;
-    if (arena->free + bump_bytes > arena->end) {
-        return NULL;
-    }
-    void* addr = arena->free;
-    arena->free += bump_bytes;
-    return addr;
-}
-
-static void arena_grow(Arena* arena, unsigned int factor) {
-    size_t count = arena->free - arena->buffer;
-
-    char* newbuf = malloc(count * factor);
-    for (int i = 0; i > count; i){
-        newbuf[i] = arena->buffer[i];
-    }
-
-    free(arena->buffer);
-    arena->buffer = newbuf;
-    arena->end = newbuf + (count*factor);
-    arena->free = arena->buffer + count;
-}
-
-static void arena_reset(Arena* arena) {
-    arena->free = arena->buffer;
-}
-
-static void arena_destroy(Arena* arena) {
-    free(arena->buffer);
-    arena->buffer = NULL;
-}
-
+static UiTheme* defaultUiTheme = NULL;
 
 /*  --------------------------------------------------------------------------------------- /
                                     UiGroup Functions
     --------------------------------------------------------------------------------------- */
 void setup_uicontext(UiContext* uictx) {
-    *uictx = (UiContext){0};
-    arena_init_withsize(&uictx->elem_arena, ELEM_ARENA_STARTSIZE);
-    arena_init_withsize(&uictx->bg_arena, BOXGROUP_ARENA_STARTSIZE);
+    *uictx = (UiContext){0}; //memset zero
+    arena_init(&uictx->ui_arena);
+    arena_init(&uictx->elem_arena);
+    arena_init(&uictx->uibox_arena);
 }
 
 void destroy_uicontext(UiContext* uictx) {
-    arena_destroy(&uictx->elem_arena);
-    arena_destroy(&uictx->bg_arena);
+    arena_destroy(&uictx->ui_arena);
 }
 
 
 /*  --------------------------------------------------------------------------------------- /
                                     UiElement Functions
     --------------------------------------------------------------------------------------- */
-static UiElement* get_elementbyid(UiContext* uictx, ElementId id){
-    return &((UiElement*)uictx->elem_arena.buffer)[id - 1];
+UiElement* element_create(UiContext* uictx) {
+    //NOTE: consecutive calls to arena_alloc are not guaranteed to give consecutive
+    //      UiElement pointers unless UiElement struct stays 8-byte padded AND 
+    //      all elements fit in one arena
+    return arena_alloc(&uictx->elem_arena, sizeof(UiElement));
+    uictx->elem_count++;
 }
 
-
-ElementId element_create(UiContext* uictx) {
-    UiElement* elem = arena_alloc(&uictx->elem_arena, sizeof(UiElement), 1);
-    while (!elem){
-        arena_grow(&uictx->elem_arena, 1.5);
-        elem = arena_alloc(&uictx->elem_arena, sizeof(UiElement), 1);
-    }
-    *elem = (UiElement){0};
-    elem->id = uictx->elem_arena.next_id;
-    uictx->elem_arena.next_id++;
-    elem->visible = true;
-    return elem->id;
-}
-
-
-ElementId element_createbox(UiContext* uictx, Rectangle draw_rectangle) {
-    ElementId id = element_create(uictx);
-    element_setdrawrectangle(uictx, id, draw_rectangle);
-    return id;
-}
-
-void element_settexture(UiContext* uictx, ElementId id, Texture2D texture, Rectangle texture_rectangle) {
-    UiElement* elem = get_elementbyid(uictx, id);
-    elem->inner_texture = texture;
-    elem->texture_rect = texture_rectangle;
-}
-
-void element_enabletexture(UiContext* uictx, ElementId id) {
-    get_elementbyid(uictx, id)->use_texture = true;
-}
-
-void element_disabletexture(UiContext* uictx, ElementId id) {
-    get_elementbyid(uictx, id)->use_texture = false;
-}
-
-void element_setcolor(UiContext* uictx, ElementId id, Color color){
-    get_elementbyid(uictx, id)->inner_color = color;
-}
-
-void element_setborder(UiContext* uictx, ElementId id, Color border_color, int border_thickness) {
-    UiElement* elem = get_elementbyid(uictx, id);
-    elem->border_color = border_color;
-    elem->border_thickness = border_thickness;
-}
-
-void element_setposition(UiContext* uictx, ElementId id, iVec2D position) {
-    UiElement* elem = get_elementbyid(uictx, id);
-    elem->rect.x = position.x;
-    elem->rect.y = position.y;
-}
-
-void element_setwidthheight(UiContext* uictx, ElementId id, int width, int height) {
-    UiElement* elem = get_elementbyid(uictx, id);
-    elem->rect.width = width;
-    elem->rect.height = height;
-}
-
-void element_setdrawrectangle(UiContext* uictx, ElementId id, Rectangle rectangle) {
-    get_elementbyid(uictx, id)->rect = rectangle;
-}
-
-void element_setglow(UiContext* uictx, ElementId id, Color glow_color, int glow_thickness) {
-    UiElement* elem = get_elementbyid(uictx, id);
-    elem->glow_color = glow_color;
-    elem->glow_thickness = glow_thickness;
-    elem->draw_glow = true;
-}
-
-//NOTE: Only works for static text or string literals where lifetime is not scoped.
-//If the src_text string gets deallocated then this is undefined behavior
-void element_settext(UiContext* uictx, ElementId id, const char* src_text) {
-    get_elementbyid(uictx, id)->text = src_text;
-}
-
-void element_removeglow(UiContext* uictx, ElementId id) {
-    get_elementbyid(uictx, id)->draw_glow = false;
-}
-
-void element_setvisibility(UiContext* uictx, ElementId id, bool is_visible) {
-    get_elementbyid(uictx, id)->visible = is_visible;
-}
-
-void element_setrectanglevisibility(UiContext* uictx, ElementId id, bool draw_rect) {
-    get_elementbyid(uictx, id)->draw_rect = draw_rect;
-}
-
-void element_setclickaction(UiContext* uictx, ElementId id, 
-            void* click_context, 
-            void(*onclick)(UiContext* ctx, ElementId clicked_element, void* click_context)) {
-    UiElement* e = get_elementbyid(uictx, id);
-    e->click_context = click_context;
-    e->click_action = onclick;
-}
-
-void element_clonesettingsfromid(UiContext* uictx, ElementId src_id, ElementId dst_id) {
-    UiElement* src_elem = get_elementbyid(uictx, src_id);
-    UiElement* dst_elem = get_elementbyid(uictx, dst_id);
-    *dst_elem = *src_elem;
-    dst_elem->id = dst_id;
-}
 
 /*  --------------------------------------------------------------------------------------- /
-                                    UiBoxGroup Functions
+                                    UiTheme Functions
     --------------------------------------------------------------------------------------- */
-static UiBoxGroup* get_boxgroupbyid(UiContext* uictx, BoxGroupId id ){
-    return &((UiBoxGroup*)uictx->bg_arena.buffer)[id - 1];
+
+void set_theme_color_attr(UiTheme* theme, ElementState state, ElementType type, ElementColorAttr attr, Color value) {
+    ((Color*)theme->elem_attributes[ELEM_COLOR_TYPE])[state * type] = value;
 }
 
-BoxGroupId boxgroup_create(UiContext* uictx) {
-    UiBoxGroup* group = arena_alloc(&uictx->bg_arena, sizeof(UiBoxGroup), 1);
-    while (!group){
-        arena_grow(&uictx->bg_arena, 1.5);
-        group = arena_alloc(&uictx->bg_arena, sizeof(UiBoxGroup), 1);
-    }
-    *group = (UiBoxGroup){0};
-    group->id = uictx->bg_arena.next_id;
-    uictx->bg_arena.next_id++;
-    return group->id;
+void set_theme_float_attr(UiTheme* theme, ElementState state, ElementType type, ElementFloatAttr attr, float value) {
+    ((float*)theme->elem_attributes[ELEM_FLOAT_TYPE])[state * type] = value;
 }
 
-bool boxgroup_addelement(UiContext* uictx, BoxGroupId bg_id, ElementId elem_id) {
-    UiBoxGroup* bg = get_boxgroupbyid(uictx, bg_id);
-    if (bg->count >= MAX_ELEMSPERBOXGROUP) {return false;}
-    bg->box_ids[bg->count] = elem_id;
-    bg->count++;
+void set_theme_int_attr(UiTheme* theme, ElementState state, ElementType type, ElementIntAttr attr, int value) {
+    ((int*)theme->elem_attributes[ELEM_INT_TYPE])[state * type] = value;
 }
 
-void boxgroup_setglow_selected(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness) {
-    UiBoxGroup* bg = get_boxgroupbyid(uictx, bg_id);
-    bg->selected_glow_color = glow_color;
-    bg->selected_glow_thickness = glow_thickness;
-}
+//WARNING: Exposes the pointer to the user, so they could just modify the default theme.
+//TODO:: Need to think about better way to expose the default theme... maybe just pass the struct around
+UiTheme* uitheme_getdefault(UiContext* uictx) {
+    if (!defaultUiTheme) {
+        defaultUiTheme = uitheme_create(uictx);
+        
+        for (int i = 0; i < ELEM_STATE_COUNT; i++) {
+            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_INNER_COLOR, WHITE);
+            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
+            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_BORDER_THICKNESS, 2);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
+            set_theme_float_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
+            set_theme_float_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
 
-void boxgroup_setglow_hover(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness) {
-    UiBoxGroup* bg = get_boxgroupbyid(uictx, bg_id);
-    bg->hover_glow_color = glow_color;
-    bg->hover_glow_thickness = glow_thickness;
-}
-
-bool boxgroup_containselement(UiBoxGroup* bg, ElementId elem_id) {
-    for (int i = 0; i < bg->count; i++) {
-        if (bg->box_ids[i] == elem_id) {
-            return true;
+            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_INNER_COLOR, BLANK);
+            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_BORDER_COLOR, BLANK);
+            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
+            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_BORDER_THICKNESS, 0);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
+            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
+            set_theme_float_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
+            set_theme_float_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
         }
+        
+        set_theme_color_attr(defaultUiTheme, ELEM_DEFAULT, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, BLACK);
+        set_theme_color_attr(defaultUiTheme, ELEM_FOCUSED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, GRAY);
+        set_theme_color_attr(defaultUiTheme, ELEM_SELECTED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, RED);
+
+        defaultUiTheme->text_font = GetFontDefault();
     }
-    return false;
+    return defaultUiTheme;
 }
 
-void boxgroup_setselected(UiContext* uictx, UiBoxGroup* bg, ElementId elem_id) {
-    if (bg->selected) {
-        element_removeglow(uictx, bg->selected);
-    }
+const size_t RAW_SIZE = sizeof(int) * 3 + sizeof(Texture2D) + sizeof(void*) * 2;
+
+UiTheme* uitheme_create(UiContext* uictx) {
+    UiTheme* theme = arena_alloc(&uictx->ui_arena, sizeof(UiTheme));
+    *theme = (UiTheme){0};
+    theme->elem_attributes[ELEM_INT_TYPE] = arena_alloc(&uictx->ui_arena, sizeof(int) * ELEM_INT_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+    theme->elem_attributes[ELEM_FLOAT_TYPE] = arena_alloc(&uictx->ui_arena, sizeof(float) * ELEM_FLOAT_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+    theme->elem_attributes[ELEM_COLOR_TYPE] = arena_alloc(&uictx->ui_arena, sizeof(Color) * ELEM_COLOR_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+    return theme;
+}
+
+UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom) {
+    UiTheme* theme = arena_alloc(&uictx->ui_arena, sizeof(UiTheme));
+    memcpy(theme, copyfrom, sizeof(UiTheme));
+    return theme;
+}
+
+
+// ElementId element_create(UiContext* uictx) {
+//     UiElement* elem = arena_alloc(&uictx->elem_arena, sizeof(UiElement), 1);
+//     while (!elem){
+//         arena_grow(&uictx->elem_arena, 1.5);
+//         elem = arena_alloc(&uictx->elem_arena, sizeof(UiElement), 1);
+//     }
+//     *elem = (UiElement){0};
+//     elem->id = uictx->elem_arena.next_id;
+//     uictx->elem_arena.next_id++;
+//     elem->visible = true;
+//     return elem->id;
+// }
+
+
+// ElementId element_createbox(UiContext* uictx, Rectangle draw_rectangle) {
+//     ElementId id = element_create(uictx);
+//     element_setdrawrectangle(uictx, id, draw_rectangle);
+//     return id;
+// }
+
+// void element_settexture(UiContext* uictx, ElementId id, Texture2D texture, Rectangle texture_rectangle) {
+//     UiElement* elem = get_elementbyid(uictx, id);
+//     elem->inner_texture = texture;
+//     elem->texture_rect = texture_rectangle;
+// }
+
+// void element_enabletexture(UiContext* uictx, ElementId id) {
+//     get_elementbyid(uictx, id)->use_texture = true;
+// }
+
+// void element_disabletexture(UiContext* uictx, ElementId id) {
+//     get_elementbyid(uictx, id)->use_texture = false;
+// }
+
+// void element_setcolor(UiContext* uictx, ElementId id, Color color){
+//     get_elementbyid(uictx, id)->inner_color = color;
+// }
+
+// void element_setborder(UiContext* uictx, ElementId id, Color border_color, int border_thickness) {
+//     UiElement* elem = get_elementbyid(uictx, id);
+//     elem->border_color = border_color;
+//     elem->border_thickness = border_thickness;
+// }
+
+// void element_setposition(UiContext* uictx, ElementId id, iVec2D position) {
+//     UiElement* elem = get_elementbyid(uictx, id);
+//     elem->rect.x = position.x;
+//     elem->rect.y = position.y;
+// }
+
+// void element_setwidthheight(UiContext* uictx, ElementId id, int width, int height) {
+//     UiElement* elem = get_elementbyid(uictx, id);
+//     elem->rect.width = width;
+//     elem->rect.height = height;
+// }
+
+// void element_setdrawrectangle(UiContext* uictx, ElementId id, Rectangle rectangle) {
+//     get_elementbyid(uictx, id)->rect = rectangle;
+// }
+
+// void element_setglow(UiContext* uictx, ElementId id, Color glow_color, int glow_thickness) {
+//     UiElement* elem = get_elementbyid(uictx, id);
+//     elem->glow_color = glow_color;
+//     elem->glow_thickness = glow_thickness;
+//     elem->draw_glow = true;
+// }
+
+// //NOTE: Only works for static text or string literals where lifetime is not scoped.
+// //If the src_text string gets deallocated then this is undefined behavior
+// void element_settext(UiContext* uictx, ElementId id, const char* src_text) {
+//     get_elementbyid(uictx, id)->text = src_text;
+// }
+
+// void element_removeglow(UiContext* uictx, ElementId id) {
+//     get_elementbyid(uictx, id)->draw_glow = false;
+// }
+
+// void element_setvisibility(UiContext* uictx, ElementId id, bool is_visible) {
+//     get_elementbyid(uictx, id)->visible = is_visible;
+// }
+
+// void element_setrectanglevisibility(UiContext* uictx, ElementId id, bool draw_rect) {
+//     get_elementbyid(uictx, id)->draw_rect = draw_rect;
+// }
+
+// void element_setclickaction(UiContext* uictx, ElementId id, 
+//             void* click_context, 
+//             void(*onclick)(UiContext* ctx, ElementId clicked_element, void* click_context)) {
+//     UiElement* e = get_elementbyid(uictx, id);
+//     e->click_context = click_context;
+//     e->click_action = onclick;
+// }
+
+// void element_clonesettingsfromid(UiContext* uictx, ElementId src_id, ElementId dst_id) {
+//     UiElement* src_elem = get_elementbyid(uictx, src_id);
+//     UiElement* dst_elem = get_elementbyid(uictx, dst_id);
+//     *dst_elem = *src_elem;
+//     dst_elem->id = dst_id;
+// }
+
+/*  --------------------------------------------------------------------------------------- /
+                                    UiComboBox Functions
+    --------------------------------------------------------------------------------------- */
+// static UiComboBox* get_boxgroupbyid(UiContext* uictx, BoxGroupId id ){
+//     return &((UiComboBox*)uictx->bg_arena.buffer)[id - 1];
+// }
+
+
+//Creates a combobox with elem_count number of elements inside of it
+//Elements are allocated by this function
+UiComboBox* combobox_create(UiContext* uictx, size_t elem_count) {
+    UiComboBox* box = arena_alloc(&uictx->uibox_arena, sizeof(UiComboBox));
+    *box = (UiComboBox){0};
+    uictx->uibox_count++;
+
+    box->first = arena_alloc(&uictx->elem_arena, sizeof(UiElement) * elem_count);
+    box->count = elem_count;
+    // box->selected_idx = 0;
+    return box;
+}
+
+// bool boxgroup_addelement(UiContext* uictx, BoxGroupId bg_id, ElementId elem_id) {
+//     UiComboBox* bg = get_boxgroupbyid(uictx, bg_id);
+//     if (bg->count >= MAX_ELEMSPERBOXGROUP) {return false;}
+//     bg->box_ids[bg->count] = elem_id;
+//     bg->count++;
+// }
+
+// void boxgroup_setglow_selected(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness) {
+//     UiComboBox* bg = get_boxgroupbyid(uictx, bg_id);
+//     bg->selected_glow_color = glow_color;
+//     bg->selected_glow_thickness = glow_thickness;
+// }
+
+// void boxgroup_setglow_hover(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness) {
+//     UiComboBox* bg = get_boxgroupbyid(uictx, bg_id);
+//     bg->hover_glow_color = glow_color;
+//     bg->hover_glow_thickness = glow_thickness;
+// }
+
+// bool boxgroup_containselement(UiComboBox* bg, ElementId elem_id) {
+//     for (int i = 0; i < bg->count; i++) {
+//         if (bg->box_ids[i] == elem_id) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+// void boxgroup_setselected(UiContext* uictx, UiComboBox* bg, ElementId elem_id) {
+//     if (bg->selected) {
+//         element_removeglow(uictx, bg->selected);
+//     }
     
-    bg->selected = elem_id;
-    element_setglow(uictx, elem_id, bg->selected_glow_color, bg->selected_glow_thickness);
-}
+//     bg->selected = elem_id;
+//     element_setglow(uictx, elem_id, bg->selected_glow_color, bg->selected_glow_thickness);
+// }
 
-void boxgroup_sethover(UiContext* uictx, UiBoxGroup* bg, ElementId elem_id) {
-    if (elem_id == bg->selected) {
-        return;
-    }
+// void boxgroup_sethover(UiContext* uictx, UiComboBox* bg, ElementId elem_id) {
+//     if (elem_id == bg->selected) {
+//         return;
+//     }
 
-    if (bg->hovered) {
-        element_removeglow(uictx, bg->hovered);
-    }
+//     if (bg->hovered) {
+//         element_removeglow(uictx, bg->hovered);
+//     }
     
-    bg->hovered = elem_id;
-    element_setglow(uictx, elem_id, bg->hover_glow_color, bg->hover_glow_thickness);
-}
+//     bg->hovered = elem_id;
+//     element_setglow(uictx, elem_id, bg->hover_glow_color, bg->hover_glow_thickness);
+// }
 
 
 //set default values for UI element (zeroing where appropriate)
@@ -265,7 +292,7 @@ void boxgroup_sethover(UiContext* uictx, UiBoxGroup* bg, ElementId elem_id) {
 
 //     element->draw_glow = false;
 //     element->glow_thickness = 0;
-//     element->glow_color = (Color){0};
+//     glow_color = (Color){0};
     
 //     element->text = NULL;
 //     element->text_color = BLACK;
@@ -313,46 +340,17 @@ bool is_inelementbounds(UiElement* elem, Vector2 pos) {
     --------------------------------------------------------------------------------------- */
 void update_uicontext(UiContext* uictx) {
     Vector2 mouse_pos = GetMousePosition();
-    uictx->mouse_clicked_elemID = 0;
-    uictx->mouse_over_elemID = 0;
+    // uictx->mouse_clicked_elemID = 0;
+    // uictx->mouse_over_elemID = 0;
 
     //Handle mouse events
-    for (UiElement* elem = (UiElement*)uictx->elem_arena.buffer; elem < (UiElement*)uictx->elem_arena.free; elem++) {
-        if (is_inelementbounds(elem, mouse_pos)) {
-            uictx->mouse_over_elemID = elem->id;
-        }
-    }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && uictx->mouse_over_elemID) {
-        uictx->mouse_down_elemID = uictx->mouse_over_elemID;
-    }
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-        if (uictx->mouse_over_elemID == uictx->mouse_down_elemID) {
-            uictx->mouse_clicked_elemID = uictx->mouse_over_elemID;
-        }
-        uictx->mouse_down_elemID= 0;
-    }
+    for (int i = 0; i < uictx->elem_count; i++) {
+        UiElement* elem = (UiElement*)uictx->elem_arena.head->data;
+        elem->focused = is_inelementbounds(elem, mouse_pos) ? true : false;
+        elem->selected =  IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && elem->focused ? true: false;
 
-    //Update box group clicks/hovers
-    if (uictx->mouse_clicked_elemID) {
-        for (UiBoxGroup* bg = (UiBoxGroup*)uictx->bg_arena.buffer; bg < (UiBoxGroup*)uictx->bg_arena.free; bg++){
-            if (boxgroup_containselement(bg, uictx->mouse_clicked_elemID)) {
-                boxgroup_setselected(uictx, bg, uictx->mouse_clicked_elemID);
-            }
-        }
-    }
-    if (uictx->mouse_over_elemID) {
-        for (UiBoxGroup* bg = (UiBoxGroup*)uictx->bg_arena.buffer; bg < (UiBoxGroup*)uictx->bg_arena.free; bg++){
-            if (boxgroup_containselement(bg, uictx->mouse_over_elemID)) {
-                boxgroup_sethover(uictx, bg, uictx->mouse_over_elemID);
-            }
-        }
-    }
-
-    //Call user click action
-    if (uictx->mouse_clicked_elemID) {
-        UiElement* elem = get_elementbyid(uictx, uictx->mouse_clicked_elemID);
-        if (elem->click_action) {
-            elem->click_action(uictx, elem->id, elem->click_context);
+        if (elem->selected && elem->click_action) {
+            elem->click_action(uictx, elem);
         }
     }
 }
@@ -360,43 +358,56 @@ void update_uicontext(UiContext* uictx) {
 
 
 static void draw_uielement(UiElement* element) {
+    UiTheme* theme = element->theme;
     if (element->draw_glow) {
+        Color glow_color = theme->glow_color_default;
+        if (element->selected) {
+            glow_color = theme->glow_color_selected;
+        } else if (element->focused) {
+            glow_color = theme->glow_color_focused;
+        }
         DrawRectangleGradientV(element->rect.x,
-                    element->rect.y - element->glow_thickness,
+                    element->rect.y - theme->glow_thickness,
                     element->rect.width,
-                    element->glow_thickness,
-                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0},
-                    element->glow_color);
+                    theme->glow_thickness,
+                    (Color){glow_color.r,glow_color.g,glow_color.b,0},
+                    glow_color);
         DrawRectangleGradientV(element->rect.x,
                     element->rect.y + element->rect.height,
                     element->rect.width,
-                    element->glow_thickness,
-                    element->glow_color,
-                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0});
-        DrawRectangleGradientH(element->rect.x - element->glow_thickness,
+                    theme->glow_thickness,
+                    glow_color,
+                    (Color){glow_color.r,glow_color.g,glow_color.b,0});
+        DrawRectangleGradientH(element->rect.x - theme->glow_thickness,
                     element->rect.y,
-                    element->glow_thickness,
+                    theme->glow_thickness,
                     element->rect.height,
-                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0},
-                    element->glow_color);
+                    (Color){glow_color.r,glow_color.g,glow_color.b,0},
+                    glow_color);
         DrawRectangleGradientH(element->rect.x + element->rect.width,
                     element->rect.y,
-                    element->glow_thickness,
+                    theme->glow_thickness,
                     element->rect.height,
-                    element->glow_color,
-                    (Color){element->glow_color.r,element->glow_color.g,element->glow_color.b,0});
+                    glow_color,
+                    (Color){glow_color.r,glow_color.g,glow_color.b,0});
     }
 
     
     if (element->draw_rect) {
-        if (element->border_thickness) {
+        Color border_color = theme->border_color_default;
+        if (element->selected) {
+            border_color = theme->border_color_selected;
+        } else if (element->focused) {
+            border_color = theme->border_color_focused;
+        }
+        if (theme->border_thickness) {
             Rectangle border_rect = (Rectangle){
-                element->rect.x - element->border_thickness,
-                element->rect.y - element->border_thickness,
-                element->rect.width + element->border_thickness * 2,
-                element->rect.height + element->border_thickness * 2
+                element->rect.x - theme->border_thickness,
+                element->rect.y - theme->border_thickness,
+                element->rect.width + theme->border_thickness * 2,
+                element->rect.height + theme->border_thickness * 2
                 };
-            DrawRectangleRec(border_rect, element->border_color);
+            DrawRectangleRec(border_rect, theme->border_color);
         }
         if (element->use_texture) {
             DrawTexturePro(element->inner_texture, element->texture_rect, element->rect, (Vector2){0,0}, 0.0f, WHITE);
@@ -445,7 +456,7 @@ void draw_uicontext(UiContext* uictx) {
     }
 }
 
-// void draw_uiboxgroup(UiBoxGroup* group) {
+// void draw_uiboxgroup(UiComboBox* group) {
 //     //handle glow effect based on selected
 //     //handle glow effect based on hover
 //     for (int i = 0; i < group->count; i++) {

@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include "common.h" //iVec2D, bool
+#include "arena.h"
 #include <stddef.h>
 
 #define MAX_ELEMSPERBOXGROUP 20
@@ -10,7 +11,7 @@
 typedef size_t ElementId;
 typedef size_t BoxGroupId;
 
-//TODO:: move to .c file
+//TODO:: move enum to .c file
 typedef enum {
     ALIGN_LEFT,
     ALIGN_CENTER,
@@ -18,74 +19,91 @@ typedef enum {
     ALIGN_ABOVE
 } TextAlignment;
 
-typedef struct {
-    size_t next_id;
-    char* buffer;
-    char* free;
-    char* end;
-} Arena;
+typedef enum {
+    ELEM_DEFAULT,
+    ELEM_FOCUSED,
+    ELEM_SELECTED,
+    ELEM_STATE_COUNT
+} ElementState;
 
-typedef struct {
+typedef enum {
+    ELEM_TEXTBOX,
+    ELEM_BUTTON,
+    ELEM_TYPE_COUNT
+} ElementType;
+
+typedef enum {
+    ELEM_INT_TYPE,
+    ELEM_FLOAT_TYPE,
+    ELEM_COLOR_TYPE,
+    ELEM_ATTR_TYPE_COUNT
+} ElementAttrType;
+
+//Colors with alpha == 0 will not be drawn
+typedef enum {
+    ELEM_COLOR_ATTR_GLOW_COLOR,
+    ELEM_COLOR_ATTR_INNER_COLOR,
+    ELEM_COLOR_ATTR_BORDER_COLOR,
+    ELEM_COLOR_ATTR_TEXT_COLOR,
+    ELEM_COLOR_ATTR_COUNT
+} ElementColorAttr;
+
+typedef enum {
+    ELEM_INT_ATTR_BORDER_THICKNESS, //Value of 0 means borderless
+    ELEM_INT_ATTR_GLOW_THICKNESS, //Value of 0 means no glow
+    ELEM_INT_ATTR_TEXT_ALIGNMENT,
+    ELEM_INT_ATTR_COUNT
+} ElementIntAttr;
+
+typedef enum {
+    ELEM_FLOAT_ATTR_TEXT_SIZE,
+    ELEM_FLOAT_ATTR_TEXT_SPACING,
+    ELEM_FLOAT_ATTR_COUNT
+} ElementFloatAttr;
+
+//UI stuff
+typedef struct UiContext {
     ElementId mouse_over_elemID;
     ElementId mouse_clicked_elemID;
     ElementId mouse_down_elemID;
-    Arena elem_arena;
-    Arena bg_arena;
-
-    // Arena text_arena;
+    Arena elem_arena; //Memory locations must be stable
+    Arena uibox_arena; //Could be dynamic array instead
+    Arena ui_arena; //Could be dynamic array instead
+    
+    int elem_count;
+    int uibox_count;
+    int mouse_clicked_elem_idx;
+    int mouse_over_elem_idx;
 } UiContext;
 
-//TODO:: move to .c file
-typedef struct UiElement{
-    ElementId id;
-    bool visible;
-
-    bool draw_rect;
-    Rectangle rect;
-    Color inner_color;
-    
-    bool use_texture;
-    Rectangle texture_rect;
-    Texture2D inner_texture;
-
-    int border_thickness;
-    Color border_color;
-
-    bool draw_glow;
-    int glow_thickness;
-    Color glow_color;
-    
-    const char* text;
-    Color text_color;
+//Theme for rendering UiElement
+typedef struct UiTheme {
     Font text_font;
-    float text_size;
-    float text_spacing;
-    TextAlignment text_align;
+    void* elem_attributes[ELEM_ATTR_TYPE_COUNT];
+} UiTheme;
 
-    void(*click_action)(UiContext* ctx, ElementId clicked_element, void* click_context);
-    void* click_context;
+typedef struct UiElement{
+    Texture2D inner_texture; //id == 0 means invalid texture
+    Rectangle texture_rect;
+    Rectangle rect;
+    ElementState state;
+    ElementType type;
+    
+    UiTheme* theme;
+    const char* text;
+
+    void(*focus_action)(UiContext* ctx, struct UiElement* focused_element);
+    void(*click_action)(UiContext* ctx, struct UiElement* clicked_element);
+    
+    bool visible;
+    bool draw_rect;
 } UiElement;
 
-
-//TODO:: move to .c file
-typedef struct {
-    BoxGroupId id;
-    ElementId box_ids[MAX_ELEMSPERBOXGROUP];
+typedef struct UiComboBox {
+    UiElement* first;
     size_t count;
-    
-    ElementId selected;
-    ElementId hovered;
-    
-    Color hover_glow_color;
-    int hover_glow_thickness;
-
-    Color selected_glow_color;
-    int selected_glow_thickness;
-} UiBoxGroup;
-
-
-
-
+    // size_t selected_idx;
+} UiComboBox;
 
 
 //UiContext functions
@@ -96,34 +114,36 @@ void destroy_uicontext(UiContext* uictx);
 // void elemarena_dealloc(ElementArena* elem_arena);
 // UiElement* elemarena_addelems(ElementArena* elem_arena, size_t count);
 
-//Element setup functions
-ElementId element_create(UiContext* uictx);
-ElementId element_createbox(UiContext* uictx, Rectangle draw_rectangle);
+//UiElement functions
+UiElement* element_create(UiContext* uictx);
+void element_settheme(UiTheme* uitheme);
+// UiElement* element_createbox(UiContext* uictx, Rectangle draw_rectangle);
 // ElementId element_createbutton(UiContext* group, Rectangle draw_rect);
 
-void element_settexture(UiContext* uictx, ElementId id, Texture2D texture, Rectangle texture_rectangle);
-void element_enabletexture(UiContext* uictx, ElementId id);
-void element_disabletexture(UiContext* uictx, ElementId id);
-void element_setcolor(UiContext* uictx, ElementId id, Color color);
-void element_setborder(UiContext* uictx, ElementId id, Color border_color, int border_thickness);
-void element_setposition(UiContext* uictx, ElementId id, iVec2D position);
-void element_setwidthheight(UiContext* uictx, ElementId id, int width, int height);
-void element_setdrawrectangle(UiContext* uictx, ElementId id, Rectangle rectangle);
-void element_setglow(UiContext* uictx, ElementId id, Color glow_color, int glow_thickness);
-void element_settext(UiContext* uictx, ElementId id, const char* src_text); //Copies from src_text. text_len includes \0
-void element_removeglow(UiContext* uictx, ElementId id);
-void element_setvisibility(UiContext* uictx, ElementId id, bool is_visible);
-void element_setrectanglevisibility(UiContext* uictx, ElementId id, bool is_visible);
-void element_setclickaction(UiContext* uictx, ElementId id, void* click_context, void(*onclick)(UiContext* ctx, ElementId clicked_element, void* click_context));
-void element_clonesettingsfromid(UiContext* uictx, ElementId src_id, ElementId dst_id);
+//UiTheme functions
+UiTheme* uitheme_create(UiContext* uictx);
+UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom);
+UiTheme* uitheme_getdefault(UiContext* uictx);
 
-BoxGroupId boxgroup_create(UiContext* uictx);
-bool boxgroup_addelement(UiContext* uictx, BoxGroupId bg_id, ElementId elem_id);
-void boxgroup_setglow_selected(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness);
-void boxgroup_setglow_hover(UiContext* uictx, BoxGroupId bg_id, Color glow_color, int glow_thickness);
-bool boxgroup_containselement(UiBoxGroup* bg, ElementId elem_id);
-void boxgroup_setselected(UiContext* uictx, UiBoxGroup* bg, ElementId elem_id);
-void boxgroup_sethover(UiContext* uictx, UiBoxGroup* bg, ElementId elem_id);
+
+// void element_settexture(UiContext* uictx, ElementId id, Texture2D texture, Rectangle texture_rectangle);
+// void element_enabletexture(UiContext* uictx, ElementId id);
+// void element_disabletexture(UiContext* uictx, ElementId id);
+// void element_setcolor(UiContext* uictx, ElementId id, Color color);
+// void element_setborder(UiContext* uictx, ElementId id, Color border_color, int border_thickness);
+// void element_setposition(UiContext* uictx, ElementId id, iVec2D position);
+// void element_setwidthheight(UiContext* uictx, ElementId id, int width, int height);
+// void element_setdrawrectangle(UiContext* uictx, ElementId id, Rectangle rectangle);
+// void element_setglow(UiContext* uictx, ElementId id, Color glow_color, int glow_thickness);
+// void element_settext(UiContext* uictx, ElementId id, const char* src_text); //Copies from src_text. text_len includes \0
+// void element_removeglow(UiContext* uictx, ElementId id);
+// void element_setvisibility(UiContext* uictx, ElementId id, bool is_visible);
+// void element_setrectanglevisibility(UiContext* uictx, ElementId id, bool is_visible);
+// void element_setclickaction(UiContext* uictx, ElementId id, void* click_context, void(*onclick)(UiContext* ctx, ElementId clicked_element, void* click_context));
+// void element_clonesettingsfromid(UiContext* uictx, ElementId src_id, ElementId dst_id);
+
+UiComboBox* combobox_create(UiContext* uictx, size_t elem_count);
+// void combobox_addelement(UiComboBox* box, UiElement* elem);
 
 //Iterate through elements:
     //Clicked:
@@ -149,7 +169,7 @@ void update_uicontext(UiContext* uictx);
 void draw_uicontext(UiContext* uictx);
 // void draw_uielement(UiElement* element);
 // void draw_uielement(UiContext* group, ElementId id); //TODO:: deprecate
-// void draw_uiboxgroup(UiBoxGroup* group);
+// void draw_uiboxgroup(UiComboBox* group);
 // void init_uielement(UiElement* element);
 
 
@@ -163,10 +183,10 @@ void draw_uicontext(UiContext* uictx);
 // void element_addglow(bool enable_glow, int glow_thickness, Color glow_color);
 // void element_removeglow(UiElement);
 
-// UiBoxGroup create_boxgroup(int count);
+// UiComboBox create_boxgroup(int count);
 // void boxgroup_setselected(UiElement element);
 // UiElement boxgroup_getselected();
 // UiElement boxgroup_getelement(int id);
-// void draw_boxgroup(UiBoxGroup group);
+// void draw_boxgroup(UiComboBox group);
 
 #endif

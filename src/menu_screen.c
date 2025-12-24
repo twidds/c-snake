@@ -45,13 +45,13 @@ typedef struct {
     UiElement* clicked_elem;
 
     UiElement* size_text;
-    UiBoxGroup map_sizes;
+    UiComboBox map_sizes;
 
     UiElement* background_text;
-    UiBoxGroup map_backgrounds;
+    UiComboBox map_backgrounds;
 
     UiElement* resolution_text;
-    UiBoxGroup resolutions;
+    UiComboBox resolutions;
     
     UiElement* start_button;
     
