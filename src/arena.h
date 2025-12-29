@@ -3,7 +3,7 @@
 
 #include <stdlib.h> //malloc, NULL
 
-#define ARENA_SLABSIZE 2048 //Bytes
+#define ARENA_SLABSIZE 4096 //Bytes
 
 typedef struct MemorySlab {
   struct MemorySlab* next;
@@ -17,9 +17,8 @@ typedef struct Arena {
 } Arena;
 
 
-void arena_init(Arena* arena);
-void* arena_alloc(Arena* arena, size_t size);
-void arena_free(Arena* arena);
-void arena_destroy(Arena* arena);
+void arena_init(Arena **arena);
+void* arena_alloc(Arena *arena, size_t size);
+void arena_destroy(Arena **arena);
 
 #endif

@@ -66,30 +66,23 @@ Rectangle GetSpriteRect(int sprite_index, int sprite_width, bool flip_x, bool fl
     return rect;
 }
 
-void elem_click(UiContext* uictx, ElementId id, void* click_context) {
-    Texture2D* tex = click_context;
-    Rectangle tex_rect = GetSpriteRect(BACKGROUND_DIRT, SQUARE_PIXEL_WIDTH, false, false);
-    element_settexture(uictx, id, *tex, tex_rect);
-    element_enabletexture(uictx, id);
-}
-
 void setup_menu(MenuGui* menu, GameState* state) {
     UiContext* uictx = &menu->gui;
     setup_uicontext(uictx);
     menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
     
-    ElementId elem_id = element_create(uictx);
-    element_setvisibility(uictx, elem_id, true);
-    element_setrectanglevisibility(uictx, elem_id, true);
-    element_setcolor(uictx, elem_id, WHITE);
-    element_setborder(uictx, elem_id, BLACK, 2);
-    element_setwidthheight(uictx, elem_id, 100, 20);
-    element_setposition(uictx, elem_id, (iVec2D){20, 20});
-    element_settext(uictx, elem_id, "TEST TEXT");
-    element_setclickaction(uictx, elem_id, &menu->t2d_background, elem_click);
-    
-    // BoxGroupId res_group = boxgroup_create(uictx);
-    
+    UiComboBox* combo = combobox_create(uictx, 2);
+    combo->elements[0].type = ELEM_BUTTON;
+    combo->elements[0].rect = (Rectangle){20,20,100,20};
+    combo->elements[0].draw_rect = true;
+    combo->elements[0].visible = true;
+    combo->elements[0].text = "TEST TEXT";
+
+    combo->elements[1].type = ELEM_BUTTON;
+    combo->elements[1].rect = (Rectangle){140,20,100,20};
+    combo->elements[1].draw_rect = true;
+    combo->elements[1].visible = true;
+    combo->elements[1].text = "TEST TEXT 2";
 }
 
 
@@ -255,12 +248,6 @@ void setup_menuscreen(GameState* state) {
 void update_menuscreen(GameState* state) {
     MenuGui* menu = state->screen_memory;
     update_uicontext(&menu->gui);
-
-    //if we click and release on a button, it's selected
-    
-    // IsMouseButtonPressed
-    // IsMouseButtonReleased
-
 }
 
 void draw_menuscreen(GameState* state) {
@@ -269,17 +256,7 @@ void draw_menuscreen(GameState* state) {
     ClearBackground(SKYBLUE);
     
     draw_uicontext(&menu->gui);
-    // draw_uielement(menu->resolution_text);
-    // draw_uiboxgroup(&menu->resolutions);
 
-    // draw_uielement(menu->size_text);
-    // draw_uiboxgroup(&menu->map_sizes);
-    
-    // draw_uielement(menu->background_text);
-    // draw_uiboxgroup(&menu->map_backgrounds);
-    
-    // draw_uielement(menu->start_button);
-    
     EndDrawing();
 }
 
