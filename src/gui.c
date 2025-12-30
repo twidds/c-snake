@@ -92,8 +92,21 @@ UiTheme* uitheme_create(UiContext* uictx) {
 }
 
 UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom) {
-    UiTheme* theme = arena_alloc(uictx->arena, sizeof(UiTheme));
-    memcpy(theme, copyfrom, sizeof(UiTheme));
+    UiTheme* theme = uitheme_create(uictx);
+    
+    theme->text_font = copyfrom->text_font;
+    memcpy(theme->elem_attributes[ELEM_INT_TYPE], 
+        copyfrom->elem_attributes[ELEM_INT_TYPE], 
+        sizeof(int) * ELEM_INT_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+
+    memcpy(theme->elem_attributes[ELEM_FLOAT_TYPE], 
+        copyfrom->elem_attributes[ELEM_FLOAT_TYPE], 
+        sizeof(float) * ELEM_FLOAT_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+
+    memcpy(theme->elem_attributes[ELEM_COLOR_TYPE], 
+        copyfrom->elem_attributes[ELEM_COLOR_TYPE], 
+        sizeof(Color) * ELEM_COLOR_ATTR_COUNT * ELEM_TYPE_COUNT * ELEM_STATE_COUNT);
+        
     return theme;
 }
 
@@ -103,11 +116,12 @@ UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom) {
 UiElement* element_create(UiContext* uictx) {
     assert(uictx->elem_count <= MAX_ELEMENTS);
 
-    UiElement* next = &uictx->elements[uictx->elem_count];
+    UiElement* new_elem = &uictx->elements[uictx->elem_count];
     uictx->elem_count++;
-    *next = (UiElement){0};
-    next->theme = uitheme_getdefault(uictx);
-    return next;
+    *new_elem = (UiElement){0};
+    new_elem->theme = uitheme_getdefault(uictx);
+    new_elem->visible = true;
+    return new_elem;
 }
 
 //Internal click action, calls user provided click action if relevant

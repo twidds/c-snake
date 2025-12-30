@@ -108,6 +108,14 @@ UiTheme* uitheme_create(UiContext* uictx);
 UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom);
 UiTheme* uitheme_getdefault(UiContext* uictx);
 
+Color get_theme_color_attr(UiTheme* theme, ElementState state, ElementType type, ElementColorAttr attr);
+float get_theme_float_attr(UiTheme* theme, ElementState state, ElementType type, ElementFloatAttr attr);
+int get_theme_int_attr(UiTheme* theme, ElementState state, ElementType type, ElementIntAttr attr);
+void set_theme_color_attr(UiTheme* theme, ElementState state, ElementType type, ElementColorAttr attr, Color value);
+void set_theme_float_attr(UiTheme* theme, ElementState state, ElementType type, ElementFloatAttr attr, float value);
+void set_theme_int_attr(UiTheme* theme, ElementState state, ElementType type, ElementIntAttr attr, int value);
+
+
 UiComboBox* combobox_create(UiContext* uictx, size_t elem_count);
 
 bool is_inelementbounds(UiElement* elem, Vector2 pos);
