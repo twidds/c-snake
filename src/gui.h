@@ -60,7 +60,7 @@ typedef enum {
 //UI stuff
 typedef struct UiContext {
     UiElement* focused_elem;
-    UiElement* clicked_elem; //why?
+    UiElement* clicked_elem;
     UiElement* pressed_elem;
     UiElement* elements;
     UiComboBox* comboboxes;
@@ -80,6 +80,7 @@ typedef struct UiElement{
     UiTheme* theme;
     UiComboBox* parent_group;
     const char* text;
+    void* element_data; //can point to arbitrary context/data user wants as part of click action
     void(*click_action)(UiContext* ctx, struct UiElement* clicked_element);
 
     Texture2D inner_texture; //id == 0 means invalid texture

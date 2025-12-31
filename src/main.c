@@ -759,11 +759,11 @@ int main(char** argv, int argc) {
                 //Once selections are made, need to setup the game.
             case SCENE_GAME:
                 // run_game(state, &snake, cherry_pos);
+                CloseWindow();
                 break;
         }
-        
     }
-    CloseWindow();
+    
     // destroy_snake(&snake);
     destroy_state(state);
 
