@@ -1,6 +1,7 @@
 #include <string.h> //memcpy
 #include <assert.h>
 #include "gui.h"
+#include "arena.h"
 
 #define ELEM_ARENA_STARTSIZE 10 * sizeof(UiElement)
 #define BOXGROUP_ARENA_STARTSIZE 10 * sizeof(UiBoxGroup)

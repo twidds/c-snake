@@ -1,10 +1,12 @@
 #include "screens.h"
-#include "gui.h"
+#include "gui.h" //raylib, GUI
+#include "arena.h"
 #include <stdlib.h> //malloc, NULL
 #include <string.h>
 
 //TODO:: Move elsewhere, commons maybe
-#define SQUARE_PIXEL_WIDTH 16
+
+
 
 typedef enum{
     TARGET_BACKGROUND,
@@ -16,13 +18,6 @@ typedef enum {
     FOOD_CHERRY,
     FOOD_SPRITE_COUNT
 } FoodSpriteIdx;
-
-typedef enum {
-    BACKGROUND_WHITETILE,
-    BACKGROUND_DIRT,
-    BACKGROUND_COUNT
-} BackgroundSprite;
-static const char* BACKGROUNDS_STRINGS[] = {"TILE", "DIRT"};
 
 typedef enum {
     MAP_SMALLSIZE,
@@ -78,7 +73,7 @@ void start_click(UiContext* ctx, UiElement* elem) {
     menu->menu_finished = true;
 }
 
-void setup_menu(MenuGui* menu, GameState* state) {
+void setup_menu(MenuGui* menu, SceneState* state) {
     UiContext* uictx = &menu->gui;
     setup_uicontext(uictx);
     menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
@@ -173,7 +168,7 @@ void setup_menu(MenuGui* menu, GameState* state) {
     //Start button
     const int start_w = 200;
     elem_y += box_w + elem_ygap;
-    elem_x = state->screen_size.x/2 - start_w/2;
+    elem_x = state->persist_data->screen_size.x/2 - start_w/2;
     UiElement* start_button = element_create(uictx);
     start_button->theme = start_theme;
     start_button->type = ELEM_BUTTON;
@@ -195,9 +190,9 @@ void setup_menu(MenuGui* menu, GameState* state) {
     menu->error_text = error_text;
 }
 
-void setup_menuscreen(GameState* state) {
-    state->screen_size = (iVec2D){1200,1000};
-    SetWindowSize(state->screen_size.x, state->screen_size.y);
+void setup_menuscreen(SceneState* state) {
+    state->persist_data->screen_size = (iVec2D){1200,1000};
+    SetWindowSize(state->persist_data->screen_size.x, state->persist_data->screen_size.y);
     
     MenuGui* menu = malloc(sizeof(MenuGui));
     setup_menu(menu, state);
@@ -205,16 +200,16 @@ void setup_menuscreen(GameState* state) {
 }
 
 
-void update_menuscreen(GameState* state) {
+void update_menuscreen(SceneState* state) {
     MenuGui* menu = state->screen_memory;
     update_uicontext(&menu->gui);
     if (menu->menu_finished) {
-        state->flags[FLAG_SCENECHANGE] = true;
+        state->flags[SCENE_FLAG_SCENECHANGE] = true;
         state->next_scene = SCENE_GAME;
     }
 }
 
-void draw_menuscreen(GameState* state) {
+void draw_menuscreen(SceneState* state) {
     MenuGui* menu = state->screen_memory;
     BeginDrawing();
     ClearBackground(SKYBLUE);
@@ -224,7 +219,7 @@ void draw_menuscreen(GameState* state) {
     EndDrawing();
 }
 
-void unload_menuscreen(GameState* state) {
+void unload_menuscreen(SceneState* state) {
     MenuGui* menu = state->screen_memory;
     UnloadTexture(menu->t2d_background);
     
@@ -234,28 +229,28 @@ void unload_menuscreen(GameState* state) {
 
     switch (resolution) {
         case RES_800x800:
-            state->screen_size = (iVec2D){800,800};
+            state->persist_data->screen_size = (iVec2D){800,800};
             break;
         case RES_1200x1200:
-            state->screen_size = (iVec2D){1200,1200};
+            state->persist_data->screen_size = (iVec2D){1200,1200};
             break;
         case RES_1600x1600:
-            state->screen_size = (iVec2D){1600,1600};
+            state->persist_data->screen_size = (iVec2D){1600,1600};
             break;
         case RES_2080x2080:
-            state->screen_size = (iVec2D){2080,2080};
+            state->persist_data->screen_size = (iVec2D){2080,2080};
             break;
     }
 
     switch (map_size) {
         case MAP_SMALLSIZE:
-            state->grid_size = (iVec2D){.x = 20, .y = 20};
+            state->persist_data->grid_size = (iVec2D){.x = 20, .y = 20};
             break;
         case MAP_MEDIUMSIZE:
-            state->grid_size = (iVec2D){.x = 50, .y = 50};
+            state->persist_data->grid_size = (iVec2D){.x = 50, .y = 50};
             break;
         case MAP_LARGESIZE:
-            state->grid_size = (iVec2D){.x = 100, .y = 100};
+            state->persist_data->grid_size = (iVec2D){.x = 100, .y = 100};
             break;
     }
     destroy_uicontext(&menu->gui);

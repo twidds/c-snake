@@ -2,26 +2,59 @@
 #ifndef SNAKE_SCREENS_H
 #define SNAKE_SCREENS_H
 
-typedef struct GameState GameState;
+#include <stdbool.h>
+#define SQUARE_PIXEL_WIDTH 16
 
-//TODO:: MOVE TO SCREENS
+typedef struct {
+    int x;
+    int y;
+} iVec2D;
+
 typedef enum {
-    SPRITESHEET_SNAKE,
-    SPRITESHEET_FOOD,
-    SPRITESHEET_BACKGROUND,
-    SPRITESHEET_COUNT
-} SpriteSheet;
+    BACKGROUND_WHITETILE,
+    BACKGROUND_DIRT,
+    BACKGROUND_COUNT
+} BackgroundSprite;
+static const char* BACKGROUNDS_STRINGS[] = {"TILE", "DIRT"};
+
+typedef struct PersistentSceneData {
+    int game_fps;
+    iVec2D screen_size;
+    iVec2D grid_size;
+    BackgroundSprite selected_background;
+} PersistentSceneData;
+
+typedef enum {
+    SCENE_GAME,
+    SCENE_MENU,
+    SCENE_COUNT
+} Scene;
+
+typedef enum {
+    SCENE_FLAG_SCENECHANGE,
+    SCENE_FLAG_COUNT
+} SceneFlag;
+
+typedef struct SceneState{
+    PersistentSceneData* persist_data;
+    void* screen_memory;
+
+    Scene current_scene;
+    Scene next_scene;
+
+    bool flags[SCENE_FLAG_COUNT];
+} SceneState;
 
 //Menu screen
-void setup_menuscreen(GameState* state);
-void update_menuscreen(GameState* state);
-void draw_menuscreen(GameState* state);
-void unload_menuscreen(GameState* state);
+void setup_menuscreen(SceneState* state);
+void update_menuscreen(SceneState* state);
+void draw_menuscreen(SceneState* state);
+void unload_menuscreen(SceneState* state);
 
 //Game screen
-void setup_gamescreen(GameState* state);
-void update_gamescreen(GameState* state);
-void draw_gamescreen(GameState* state);
-void unload_gamescreen(GameState* state);
+void setup_gamescreen(SceneState* state);
+void update_gamescreen(SceneState* state);
+void draw_gamescreen(SceneState* state);
+void unload_gamescreen(SceneState* state);
 
 #endif

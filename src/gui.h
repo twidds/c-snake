@@ -2,10 +2,10 @@
 #define SNAKE_GUI_H
 
 #include "raylib.h"
-#include "common.h" //iVec2D, bool
-#include "arena.h"
+#include <stdbool.h>
 #include <stddef.h>
 
+typedef struct Arena Arena;
 typedef struct UiComboBox UiComboBox;
 typedef struct UiElement UiElement;
 
