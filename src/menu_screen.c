@@ -4,20 +4,11 @@
 #include <stdlib.h> //malloc, NULL
 #include <string.h>
 
-//TODO:: Move elsewhere, commons maybe
-
-
-
 typedef enum{
     TARGET_BACKGROUND,
     TARGET_OUTPUT,
     TARGET_COUNT
 } RenderTarget;
-
-typedef enum {
-    FOOD_CHERRY,
-    FOOD_SPRITE_COUNT
-} FoodSpriteIdx;
 
 typedef enum {
     MAP_SMALLSIZE,
@@ -45,7 +36,6 @@ typedef struct {
     Texture2D t2d_background; //TODO:: remove?
     bool menu_finished;
 } MenuGui; //TODO:: change to menu screen object
-
 
 Rectangle GetSpriteRect(int sprite_index, int sprite_width, bool flip_x, bool flip_y) {
     Rectangle rect = {sprite_width*sprite_index, 0, sprite_width, sprite_width};
@@ -80,7 +70,7 @@ void setup_menu(MenuGui* menu, SceneState* state) {
     menu->menu_finished = false;
     
     //Change themes
-    UiTheme* default_theme = uitheme_getdefault(uictx);
+    UiTheme* default_theme = uictx->default_theme;
     UiTheme* start_theme = uitheme_createcopy(uictx, default_theme);
     for (int i = 0; i < ELEM_STATE_COUNT; i++) {
         set_theme_int_attr(default_theme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_LEFT);
@@ -190,6 +180,11 @@ void setup_menu(MenuGui* menu, SceneState* state) {
     menu->error_text = error_text;
 }
 
+
+/*  --------------------------------------------------------------------------------------- /
+                                    Scene Callbacks
+    --------------------------------------------------------------------------------------- */
+
 void setup_menuscreen(SceneState* state) {
     state->persist_data->screen_size = (iVec2D){1200,1000};
     SetWindowSize(state->persist_data->screen_size.x, state->persist_data->screen_size.y);
@@ -198,7 +193,6 @@ void setup_menuscreen(SceneState* state) {
     setup_menu(menu, state);
     state->screen_memory = menu;
 }
-
 
 void update_menuscreen(SceneState* state) {
     MenuGui* menu = state->screen_memory;
@@ -225,7 +219,7 @@ void unload_menuscreen(SceneState* state) {
     
     ScreenRes resolution = menu->map_resolutions->selected - menu->map_resolutions->elements;
     MapSize map_size = menu->map_sizes->selected - menu->map_sizes->elements;
-    BackgroundSprite background = menu->map_textures->selected - menu->map_textures->elements;
+    state->persist_data->selected_background = menu->map_textures->selected - menu->map_textures->elements;
 
     switch (resolution) {
         case RES_800x800:

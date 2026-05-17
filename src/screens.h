@@ -11,6 +11,11 @@ typedef struct {
 } iVec2D;
 
 typedef enum {
+    FOOD_CHERRY,
+    FOOD_SPRITE_COUNT
+} FoodSpriteIdx;
+
+typedef enum {
     BACKGROUND_WHITETILE,
     BACKGROUND_DIRT,
     BACKGROUND_COUNT
@@ -25,6 +30,7 @@ typedef struct PersistentSceneData {
 } PersistentSceneData;
 
 typedef enum {
+    SCENE_NONE,
     SCENE_GAME,
     SCENE_MENU,
     SCENE_COUNT
@@ -44,6 +50,10 @@ typedef struct SceneState{
 
     bool flags[SCENE_FLAG_COUNT];
 } SceneState;
+
+//Implemented in menu_screen.c, should be in a sprites utility file
+typedef struct Rectangle Rectangle;
+Rectangle GetSpriteRect(int sprite_index, int sprite_width, bool flip_x, bool flip_y);
 
 //Menu screen
 void setup_menuscreen(SceneState* state);

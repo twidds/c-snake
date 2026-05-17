@@ -57,6 +57,12 @@ typedef enum {
     ELEM_FLOAT_ATTR_COUNT
 } ElementFloatAttr;
 
+//Theme for rendering UiElement
+typedef struct UiTheme {
+    Font text_font;
+    void* elem_attributes[ELEM_ATTR_TYPE_COUNT];
+} UiTheme;
+
 //UI stuff
 typedef struct UiContext {
     UiElement* focused_elem;
@@ -65,16 +71,11 @@ typedef struct UiContext {
     UiElement* elements;
     UiComboBox* comboboxes;
     Arena* arena; //Memory locations must be stable
+    UiTheme* default_theme;
     
     int elem_count;
     int uibox_count;
 } UiContext;
-
-//Theme for rendering UiElement
-typedef struct UiTheme {
-    Font text_font;
-    void* elem_attributes[ELEM_ATTR_TYPE_COUNT];
-} UiTheme;
 
 typedef struct UiElement{
     UiTheme* theme;
@@ -107,7 +108,7 @@ void element_settheme(UiTheme* uitheme);
 
 UiTheme* uitheme_create(UiContext* uictx);
 UiTheme* uitheme_createcopy(UiContext* uictx, UiTheme* copyfrom);
-UiTheme* uitheme_getdefault(UiContext* uictx);
+void uitheme_createdefault(UiContext* uictx);
 
 Color get_theme_color_attr(UiTheme* theme, ElementState state, ElementType type, ElementColorAttr attr);
 float get_theme_float_attr(UiTheme* theme, ElementState state, ElementType type, ElementFloatAttr attr);

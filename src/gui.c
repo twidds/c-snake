@@ -9,7 +9,6 @@
 #define BOXGROUP_STARTSIZE 10
 #define MAX_ELEMENTS 30
 #define MAX_COMBOBOXES 15
-static UiTheme* defaultUiTheme = NULL;
 
 /*  --------------------------------------------------------------------------------------- /
                                     UiTheme Functions
@@ -46,41 +45,38 @@ void set_theme_int_attr(UiTheme* theme, ElementState state, ElementType type, El
 
 //WARNING: Exposes the pointer to the user, so they could just modify the default theme.
 //TODO:: Need to think about better way to expose the default theme... maybe just pass the struct around
-UiTheme* uitheme_getdefault(UiContext* uictx) {
-    if (!defaultUiTheme) {
-        defaultUiTheme = uitheme_create(uictx);
-        int* int_attrs = defaultUiTheme->elem_attributes[ELEM_INT_TYPE];
-        int* float_attrs = defaultUiTheme->elem_attributes[ELEM_FLOAT_TYPE];
-        int* color_attrs = defaultUiTheme->elem_attributes[ELEM_COLOR_TYPE];
-        
-        for (int i = 0; i < ELEM_STATE_COUNT; i++) {
-            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_INNER_COLOR, WHITE);
-            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
-            set_theme_color_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_BORDER_THICKNESS, 2);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
-            set_theme_float_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
-            set_theme_float_attr(defaultUiTheme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
+void uitheme_createdefault(UiContext* uictx) {
+    uictx->default_theme = uitheme_create(uictx);
+    int* int_attrs = uictx->default_theme->elem_attributes[ELEM_INT_TYPE];
+    int* float_attrs = uictx->default_theme->elem_attributes[ELEM_FLOAT_TYPE];
+    int* color_attrs = uictx->default_theme->elem_attributes[ELEM_COLOR_TYPE];
+    
+    for (int i = 0; i < ELEM_STATE_COUNT; i++) {
+        set_theme_color_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_INNER_COLOR, WHITE);
+        set_theme_color_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
+        set_theme_color_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_INT_ATTR_BORDER_THICKNESS, 2);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
+        set_theme_float_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
+        set_theme_float_attr(uictx->default_theme, i, ELEM_BUTTON, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
 
-            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_INNER_COLOR, BLANK);
-            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_BORDER_COLOR, BLANK);
-            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
-            set_theme_color_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_BORDER_THICKNESS, 0);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
-            set_theme_int_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
-            set_theme_float_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
-            set_theme_float_attr(defaultUiTheme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
-        }
-        
-        set_theme_color_attr(defaultUiTheme, ELEM_DEFAULT, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, BLACK);
-        set_theme_color_attr(defaultUiTheme, ELEM_FOCUSED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, GRAY);
-        set_theme_color_attr(defaultUiTheme, ELEM_SELECTED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, RED);
-
-        defaultUiTheme->text_font = GetFontDefault();
+        set_theme_color_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_INNER_COLOR, BLANK);
+        set_theme_color_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_BORDER_COLOR, BLANK);
+        set_theme_color_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_TEXT_COLOR, BLACK);
+        set_theme_color_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_COLOR_ATTR_GLOW_COLOR, BLANK);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_BORDER_THICKNESS, 0);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_GLOW_THICKNESS, 0);
+        set_theme_int_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_INT_ATTR_TEXT_ALIGNMENT, ALIGN_CENTER);
+        set_theme_float_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SIZE, 12.0f);
+        set_theme_float_attr(uictx->default_theme, i, ELEM_TEXTBOX, ELEM_FLOAT_ATTR_TEXT_SPACING, 1.0f);
     }
-    return defaultUiTheme;
+    
+    set_theme_color_attr(uictx->default_theme, ELEM_DEFAULT, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, BLACK);
+    set_theme_color_attr(uictx->default_theme, ELEM_FOCUSED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, GRAY);
+    set_theme_color_attr(uictx->default_theme, ELEM_SELECTED, ELEM_BUTTON, ELEM_COLOR_ATTR_BORDER_COLOR, RED);
+
+    uictx->default_theme->text_font = GetFontDefault();
 }
 
 UiTheme* uitheme_create(UiContext* uictx) {
@@ -120,7 +116,7 @@ UiElement* element_create(UiContext* uictx) {
     UiElement* new_elem = &uictx->elements[uictx->elem_count];
     uictx->elem_count++;
     *new_elem = (UiElement){0};
-    new_elem->theme = uitheme_getdefault(uictx);
+    new_elem->theme = uictx->default_theme;
     new_elem->visible = true;
     return new_elem;
 }
@@ -241,6 +237,7 @@ void setup_uicontext(UiContext* uictx) {
     arena_init(&uictx->arena);
     uictx->elements = arena_alloc(uictx->arena, MAX_ELEMENTS * sizeof(UiElement));
     uictx->comboboxes = arena_alloc(uictx->arena, MAX_COMBOBOXES * sizeof(UiComboBox));
+    uitheme_createdefault(uictx);
 }
 
 void destroy_uicontext(UiContext* uictx) {

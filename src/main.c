@@ -5,9 +5,6 @@
 #include "screens.h"
 #include "raylib.h"
 
-typedef Vector2 fVec2D;
-// const int GAME_FPS = 60;
-
 SceneState* scenestate_create() {
     SceneState* state = malloc(sizeof(SceneState));
     *state = (SceneState){};
@@ -16,6 +13,7 @@ SceneState* scenestate_create() {
     *(state->persist_data) = (PersistentSceneData){};
     
     state->persist_data->game_fps = 60;
+    state->current_scene = SCENE_NONE;
     state->next_scene = SCENE_MENU;
     state->flags[SCENE_FLAG_SCENECHANGE] = true;
     
@@ -27,7 +25,54 @@ void scenestate_destroy(SceneState* state){
     free(state);
 }
 
+int main(char** argv, int argc) {
+    SceneState* state = scenestate_create();
+    
+    InitWindow(100, 100, "c-snake");
+    SetTargetFPS(state->persist_data->game_fps);
+    
+    while (!WindowShouldClose()) {
+        if (state->flags[SCENE_FLAG_SCENECHANGE]) {
+            switch(state->current_scene){
+                case SCENE_MENU:
+                    unload_menuscreen(state);
+                    break;
+                case SCENE_GAME:
+                    unload_gamescreen(state);
+                    break;
+                default:
+                    break;
+            }
+            
+            switch(state->next_scene){
+                case SCENE_MENU:
+                    setup_menuscreen(state);
+                    break;
+                case SCENE_GAME:
+                    setup_gamescreen(state);
+                    break;
+            }
+            state->current_scene = state->next_scene;
+            state->flags[SCENE_FLAG_SCENECHANGE] = false;
+        }
 
+        switch(state->current_scene) {
+            case SCENE_MENU:
+                update_menuscreen(state);
+                draw_menuscreen(state);
+                break;
+            case SCENE_GAME:
+                update_gamescreen(state);
+                draw_gamescreen(state);
+                break;
+        }
+    }
+    
+    // destroy_snake(&snake);
+    scenestate_destroy(state);
+
+    return 0;
+}
 
 // //Just dumping raylib sound functions here for now
 // void play_sound() {
@@ -55,58 +100,4 @@ void scenestate_destroy(SceneState* state){
 //     // RLAPI void PauseMusicStream(Music music);                             // Pause music playing
 //     // RLAPI void ResumeMusicStream(Music music);                            // Resume playing paused music
 // }
-
-
-
-//TODO:: parse cmd line to get screen w/h and vsync/framerate
-int main(char** argv, int argc) {
-    SceneState* state = scenestate_create();
-    
-    
-    InitWindow(100, 100, "c-snake");
-    SetTargetFPS(state->persist_data->game_fps);
-    
-    while (!WindowShouldClose()) {
-        if (state->flags[SCENE_FLAG_SCENECHANGE]) {
-            switch(state->current_scene){
-                case SCENE_MENU:
-                    unload_menuscreen(state);
-                    break;
-                case SCENE_GAME:
-                    break;
-            }
-            
-            switch(state->next_scene){
-                case SCENE_MENU:
-                    setup_menuscreen(state);
-                    break;
-                case SCENE_GAME:
-                    update_gamescreen(state);
-                    break;
-            }
-            state->current_scene = state->next_scene;
-            state->flags[SCENE_FLAG_SCENECHANGE] = false;
-        }
-
-        switch(state->current_scene) {
-            case SCENE_MENU:
-                update_menuscreen(state);
-                draw_menuscreen(state);
-                // run_menu(state, &snake, cherry_pos, menu_items);
-                break;
-                //handle clicks/input
-                //render menu
-                //Once selections are made, need to setup the game.
-            case SCENE_GAME:
-                // run_game(state, &snake, cherry_pos);
-                CloseWindow();
-                break;
-        }
-    }
-    
-    // destroy_snake(&snake);
-    scenestate_destroy(state);
-
-    return 0;
-}
 

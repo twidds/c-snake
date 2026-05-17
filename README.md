@@ -9,11 +9,9 @@ Environment used to build (you may need to adjust for your own setup):
 
 Controls:
  * esc - exit game
- * s - show/hide stats
  * p - pause
  * i - invincible mode
  * arrow keys - control snake
-
 
 Build environment setup (MSYS MakeFiles):
 1. Download and install cmake: https://cmake.org/download/ (**NOTE**: CMAKE 4.X.X is not supported)
