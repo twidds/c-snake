@@ -4,6 +4,7 @@
 
 #include "screens.h"
 #include "raylib.h"
+#include "images.h"
 
 SceneState* scenestate_create() {
     SceneState* state = malloc(sizeof(SceneState));
@@ -30,6 +31,7 @@ int main(char** argv, int argc) {
     
     InitWindow(100, 100, "c-snake");
     SetTargetFPS(state->persist_data->game_fps);
+    init_snaketextures();
     
     while (!WindowShouldClose()) {
         if (state->flags[SCENE_FLAG_SCENECHANGE]) {
