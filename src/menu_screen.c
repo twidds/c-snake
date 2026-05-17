@@ -1,6 +1,8 @@
 #include "screens.h"
 #include "gui.h" //raylib, GUI
 #include "arena.h"
+#include "images.h"
+
 #include <stdlib.h> //malloc, NULL
 #include <string.h>
 
@@ -66,7 +68,7 @@ void start_click(UiContext* ctx, UiElement* elem) {
 void setup_menu(MenuGui* menu, SceneState* state) {
     UiContext* uictx = &menu->gui;
     setup_uicontext(uictx);
-    menu->t2d_background = LoadTexture("assets/backgrounds_spritesheet.bmp");
+    menu->t2d_background = get_snaketexture(TEXTURE_BACKGROUNDS);
     menu->menu_finished = false;
     
     //Change themes
@@ -215,7 +217,6 @@ void draw_menuscreen(SceneState* state) {
 
 void unload_menuscreen(SceneState* state) {
     MenuGui* menu = state->screen_memory;
-    UnloadTexture(menu->t2d_background);
     
     ScreenRes resolution = menu->map_resolutions->selected - menu->map_resolutions->elements;
     MapSize map_size = menu->map_sizes->selected - menu->map_sizes->elements;

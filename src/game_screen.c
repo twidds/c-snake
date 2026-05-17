@@ -1,25 +1,13 @@
 #include "gui.h"
 #include "arena.h"
 #include "screens.h"
+#include "images.h"
+
 #include <math.h>
 
 const float MIN_TICK_WAIT_FRAMES = 0.0f;
 const float MAX_TICK_WAIT_FRAMES = 60.0f;
 const int KEY_QUEUE_LENGTH = 2;
-
-
-
-typedef enum {
-    TEXTURE_SNAKE,
-    TEXTURE_FOOD,
-    TEXTURE_BACKGROUNDS,
-    TEXTURE_COUNT
-} TextureIdx;
-const char *TEXTURE_NAME_STRINGS[] = {
-    "assets/snake_spritesheet.bmp",
-    "assets/food_spritesheet.bmp",
-    "assets/backgrounds_spritesheet.bmp"
-};
 
 typedef enum Direction {
     DIR_NULL,
@@ -569,7 +557,7 @@ void setup_gamescreen(SceneState* state) {
     gs->textures = arena_alloc(gs->arena, sizeof(Texture2D) * TEXTURE_COUNT);
     gs->presence_array = arena_alloc(gs->arena, gs->grid_size.x * gs->grid_size.y);
     for (int i = TEXTURE_SNAKE; i < TEXTURE_COUNT; i++) {
-        gs->textures[i] = LoadTexture(TEXTURE_NAME_STRINGS[i]);
+        gs->textures[i] = get_snaketexture(i);
     }
     gs->tick_frames = 8.0f;
     gs->tick_time = GetTime();
@@ -600,9 +588,6 @@ void setup_gamescreen(SceneState* state) {
 void unload_gamescreen(SceneState* state) {
     GameState* gs = (GameState*)state->screen_memory;
     destroy_uicontext(&gs->menu_gameover);
-    for (int i = 0; i < TEXTURE_COUNT; i++) {
-        UnloadTexture(gs->textures[i]);
-    }
     arena_destroy(&gs->arena);
     free(gs);
 }
