@@ -11,7 +11,8 @@
             "binaryDir": "${sourceDir}/build/release",
             "generator": "MinGW Makefiles",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE":"Release"
+                "CMAKE_BUILD_TYPE":"Release",
+                "CMAKE_C_FLAGS":"-mwindows"
             }
         },
         {
